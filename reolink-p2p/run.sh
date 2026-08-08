@@ -1,147 +1,96 @@
 #!/bin/sh
 
-set -u
-
-OPTIONS="/data/options.json"
-PYFILE="/data/reolink_raw_stream_test.py"
-
-UID_VALUE="$(jq -r '.uid' "$OPTIONS")"
-USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
-PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
-
 echo "========================================"
 echo " REOLINK P2P RAW STREAM TEST"
 echo "========================================"
 
-cat > "$PYFILE" <<PYTHON
-import traceback
+cat > /data/reolink_raw_stream_test.py <<'PYTHON'
+import os
 import time
-import inspect
-import binascii
+from pyneolink.camera import Camera
 
-print("RESULT: PYTHON_START", flush=True)
+UID = "9527000KLBT71M83"
+USERNAME = "admin"
+PASSWORD = os.environ.get("REOLINK_PASSWORD", "")
+
+OUT = "/data/reolink_stream.bin"
+
+print("RESULT: PYTHON_START")
+print("RESULT: PYNEOLINK_IMPORT_OK")
+
+camera = Camera(
+    uid=UID,
+    username=USERNAME,
+    password=PASSWORD,
+    discovery="relay",
+    stream="both",
+    debug=True,
+)
+
+print("RESULT: CAMERA_ERZEUGT")
 
 try:
-    from pyneolink.camera import Camera
-
-    camera = Camera(
-        uid="${UID_VALUE}",
-        username="${USERNAME_VALUE}",
-        password="${PASSWORD_VALUE}",
-        discovery="relay",
-        stream="mainStream",
-        timeout=30.0,
-        debug=True,
-    )
-
-    print("RESULT: CAMERA_ERZEUGT", flush=True)
-
+    print("RESULT: CONNECT_START")
     camera.connect()
+    print("RESULT: CONNECT_OK")
 
-    print("RESULT: CONNECT_OK", flush=True)
-
+    print("RESULT: START_STREAM")
     camera.start_stream("mainStream")
+    print("RESULT: START_STREAM_OK")
 
-    print("RESULT: START_STREAM_OK", flush=True)
+    total = 0
+    packets = 0
+    start = time.time()
 
-    print("RESULT: DIREKTER_RECV_TEST", flush=True)
+    print("RESULT: READ_STREAM_START")
 
-    print(
-        "RESULT: RECV_SIGNATURE="
-        + str(inspect.signature(camera._recv)),
-        flush=True
-    )
+    with open(OUT, "wb") as f:
+        for payload in camera.read_stream_payloads("mainStream"):
+            if payload:
+                f.write(payload)
+                f.flush()
 
-    print("RESULT: LESE_ROHDATEN", flush=True)
+                packets += 1
+                total += len(payload)
 
-    for i in range(5):
+                print(
+                    f"RESULT: PAYLOAD={packets} "
+                    f"BYTES={len(payload)} "
+                    f"TOTAL={total}"
+                )
 
-        print(
-            "RESULT: RECV_ATTEMPT="
-            + str(i + 1),
-            flush=True
-        )
+            if time.time() - start >= 10:
+                print("RESULT: 10_SEKUNDEN_ERREICHT")
+                break
 
-        try:
+except Exception as e:
+    print(f"RESULT: STREAM_FEHLER={type(e).__name__}: {e}")
 
-            msg = camera._recv(timeout=3.0)
-
-            print(
-                "RESULT: RECV_TYPE="
-                + str(type(msg)),
-                flush=True
-            )
-
-            print(
-                "RESULT: RECV_REPR="
-                + repr(msg)[:500],
-                flush=True
-            )
-
-            print(
-                "RESULT: RECV_ATTRS="
-                + str([
-                    x for x in dir(msg)
-                    if not x.startswith("_")
-                ]),
-                flush=True
-            )
-
-        except Exception as e:
-
-            print(
-                "RESULT: RECV_ERROR="
-                + repr(e),
-                flush=True
-            )
-
-            traceback.print_exc()
-
-            break
-
-    print("RESULT: STOP_STREAM", flush=True)
-
+finally:
     try:
         camera.stop_stream("mainStream")
-        print("RESULT: STOP_OK", flush=True)
+        print("RESULT: STOP_STREAM_OK")
     except Exception as e:
-        print(
-            "RESULT: STOP_ERROR="
-            + repr(e),
-            flush=True
-        )
+        print(f"RESULT: STOP_STREAM_FEHLER={type(e).__name__}: {e}")
 
     try:
         camera.close()
-        print("RESULT: CLOSE_OK", flush=True)
+        print("RESULT: CLOSE_OK")
     except Exception as e:
-        print(
-            "RESULT: CLOSE_ERROR="
-            + repr(e),
-            flush=True
-        )
+        print(f"RESULT: CLOSE_FEHLER={type(e).__name__}: {e}")
 
-except BaseException as e:
+print(f"RESULT: DATEI_VORHANDEN={os.path.exists(OUT)}")
 
-    print(
-        "RESULT: FATAL="
-        + repr(e),
-        flush=True
-    )
+if os.path.exists(OUT):
+    print(f"RESULT: DATEIGROESSE={os.path.getsize(OUT)}")
 
-    traceback.print_exc()
-
-print("RESULT: PYTHON_ENDE", flush=True)
+print("RESULT: TEST_ENDE")
 PYTHON
 
 echo "RESULT: PYTHON_DATEI_ERSTELLT"
 echo "RESULT: STARTE_PYTHON"
 
-python -u "$PYFILE"
+python3 /data/reolink_raw_stream_test.py
 
-RC="$?"
-
-echo "RESULT: PYTHON_EXITCODE=$RC"
+echo "RESULT: PYTHON_EXITCODE=$?"
 echo "RESULT: SHELL_ENDE"
-
-exit "$RC"
