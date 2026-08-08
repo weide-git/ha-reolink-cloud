@@ -1,10 +1,11 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20
+ARG BUILD_FROM
+FROM $BUILD_FROM
 
-FROM ${BUILD_FROM}
+RUN apk add --no-cache \
+    python3 \
+    py3-pip
 
-WORKDIR /data
-
-RUN pip install --no-cache-dir pyneolink==0.4.0
+RUN pip3 install --no-cache-dir --break-system-packages pyneolink==0.4.0
 
 COPY run.sh /run.sh
 COPY reolink_raw_udp_test.py /data/reolink_raw_udp_test.py
