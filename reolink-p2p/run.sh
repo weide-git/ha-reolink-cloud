@@ -3,34 +3,26 @@
 set -u
 
 OPTIONS="/data/options.json"
-PYFILE="/data/reolink_stream_test.py"
+PYFILE="/data/reolink_raw_stream_test.py"
 
 UID_VALUE="$(jq -r '.uid' "$OPTIONS")"
 USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
 echo "========================================"
-echo " REOLINK P2P DIRECT STREAM TEST"
+echo " REOLINK P2P RAW STREAM TEST"
 echo "========================================"
 
 cat > "$PYFILE" <<PYTHON
 import traceback
 import time
+import inspect
+import binascii
 
 print("RESULT: PYTHON_START", flush=True)
 
 try:
-    import pyneolink
-
-    print(
-        "RESULT: PYNEOLINK_VERSION="
-        + str(getattr(pyneolink, "__version__", "unknown")),
-        flush=True
-    )
-
     from pyneolink.camera import Camera
-
-    print("RESULT: CAMERA_IMPORT_OK", flush=True)
 
     camera = Camera(
         uid="${UID_VALUE}",
@@ -44,85 +36,87 @@ try:
 
     print("RESULT: CAMERA_ERZEUGT", flush=True)
 
-    print("RESULT: CONNECT_START", flush=True)
-
     camera.connect()
 
     print("RESULT: CONNECT_OK", flush=True)
-
-    print("RESULT: START_STREAM", flush=True)
 
     camera.start_stream("mainStream")
 
     print("RESULT: START_STREAM_OK", flush=True)
 
-    print("RESULT: READ_STREAM_START", flush=True)
+    print("RESULT: DIREKTER_RECV_TEST", flush=True)
 
-    payloads = camera.read_stream_payloads("mainStream")
+    print(
+        "RESULT: RECV_SIGNATURE="
+        + str(inspect.signature(camera._recv)),
+        flush=True
+    )
 
-    start = time.time()
-    count = 0
-    total_bytes = 0
+    print("RESULT: LESE_ROHDATEN", flush=True)
 
-    for payload in payloads:
-
-        count += 1
-
-        try:
-            size = len(payload)
-        except Exception:
-            size = -1
-
-        total_bytes += max(size, 0)
+    for i in range(5):
 
         print(
-            "RESULT: PAYLOAD="
-            + str(count)
-            + " BYTES="
-            + str(size)
-            + " TOTAL="
-            + str(total_bytes),
+            "RESULT: RECV_ATTEMPT="
+            + str(i + 1),
             flush=True
         )
 
-        if count >= 10:
-            print("RESULT: 10_PAYLOADS_ERHALTEN", flush=True)
+        try:
+
+            msg = camera._recv(timeout=3.0)
+
+            print(
+                "RESULT: RECV_TYPE="
+                + str(type(msg)),
+                flush=True
+            )
+
+            print(
+                "RESULT: RECV_REPR="
+                + repr(msg)[:500],
+                flush=True
+            )
+
+            print(
+                "RESULT: RECV_ATTRS="
+                + str([
+                    x for x in dir(msg)
+                    if not x.startswith("_")
+                ]),
+                flush=True
+            )
+
+        except Exception as e:
+
+            print(
+                "RESULT: RECV_ERROR="
+                + repr(e),
+                flush=True
+            )
+
+            traceback.print_exc()
+
             break
-
-        if time.time() - start > 30:
-            print("RESULT: STREAM_TIMEOUT_30S", flush=True)
-            break
-
-    print(
-        "RESULT: PAYLOAD_COUNT="
-        + str(count),
-        flush=True
-    )
-
-    print(
-        "RESULT: TOTAL_BYTES="
-        + str(total_bytes),
-        flush=True
-    )
 
     print("RESULT: STOP_STREAM", flush=True)
 
     try:
         camera.stop_stream("mainStream")
-        print("RESULT: STOP_STREAM_OK", flush=True)
+        print("RESULT: STOP_OK", flush=True)
     except Exception as e:
         print(
-            "RESULT: STOP_STREAM_FEHLER="
+            "RESULT: STOP_ERROR="
             + repr(e),
             flush=True
         )
 
     try:
         camera.close()
-        print("RESULT: CAMERA_CLOSE_OK", flush=True)
+        print("RESULT: CLOSE_OK", flush=True)
     except Exception as e:
         print(
-            "RESULT: CAMERA_CLOSE_FEHLER="
+            "RESULT: CLOSE_ERROR="
             + repr(e),
             flush=True
         )
@@ -130,7 +124,7 @@ try:
 except BaseException as e:
 
     print(
-        "RESULT: STREAM_FEHLER="
+        "RESULT: FATAL="
         + repr(e),
         flush=True
     )
