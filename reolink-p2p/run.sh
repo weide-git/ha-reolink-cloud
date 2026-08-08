@@ -1,22 +1,47 @@
 #!/bin/sh
 
 echo "========================================"
-echo " REOLINK P2P RAW STREAM TEST"
+echo " REOLINK P2P PASSWORD TEST"
 echo "========================================"
 
-cat > /data/reolink_raw_stream_test.py <<'PYTHON'
+PASSWORD="$(python3 -c '
+import json
+with open("/data/options.json", "r") as f:
+    data = json.load(f)
+print(data.get("password", ""))
+')"
+
+echo "RESULT: OPTIONS_GELESEN"
+
+if [ -z "$PASSWORD" ]; then
+    echo "RESULT: PASSWORD_LEER"
+else
+    echo "RESULT: PASSWORD_GESETZT"
+    echo "RESULT: PASSWORD_LAENGE=${#PASSWORD}"
+fi
+
+export REOLINK_PASSWORD="$PASSWORD"
+
+cat > /data/reolink_password_test.py <<'PYTHON'
 import os
-import time
+import pyneolink
+
 from pyneolink.camera import Camera
+
 
 UID = "9527000KLBT71M83"
 USERNAME = "admin"
 PASSWORD = os.environ.get("REOLINK_PASSWORD", "")
 
-OUT = "/data/reolink_stream.bin"
 
 print("RESULT: PYTHON_START")
-print("RESULT: PYNEOLINK_IMPORT_OK")
+print(f"RESULT: PYNEOLINK_VERSION={getattr(pyneolink, '__version__', 'unbekannt')}")
+print("RESULT: CAMERA_IMPORT_OK")
+
+print(f"RESULT: PASSWORD_GESETZT={bool(PASSWORD)}")
+print(f"RESULT: PASSWORD_LAENGE={len(PASSWORD)}")
+
+print("RESULT: ERZEUGE_CAMERA")
 
 camera = Camera(
     uid=UID,
@@ -28,61 +53,32 @@ camera = Camera(
 )
 
 print("RESULT: CAMERA_ERZEUGT")
+print(f"RESULT: CAMERA_PASSWORD_GESETZT={bool(camera.password)}")
+print(f"RESULT: CAMERA_PASSWORD_LAENGE={len(camera.password)}")
 
 try:
     print("RESULT: CONNECT_START")
+
     camera.connect()
+
     print("RESULT: CONNECT_OK")
 
-    print("RESULT: START_STREAM")
-    camera.start_stream("mainStream")
-    print("RESULT: START_STREAM_OK")
+    print("RESULT: LOGIN_START")
 
-    total = 0
-    packets = 0
-    start = time.time()
+    result = camera.login()
 
-    print("RESULT: READ_STREAM_START")
-
-    with open(OUT, "wb") as f:
-        for payload in camera.read_stream_payloads("mainStream"):
-            if payload:
-                f.write(payload)
-                f.flush()
-
-                packets += 1
-                total += len(payload)
-
-                print(
-                    f"RESULT: PAYLOAD={packets} "
-                    f"BYTES={len(payload)} "
-                    f"TOTAL={total}"
-                )
-
-            if time.time() - start >= 10:
-                print("RESULT: 10_SEKUNDEN_ERREICHT")
-                break
+    print("RESULT: LOGIN_OK")
+    print(f"RESULT: LOGIN_RESULT={result}")
 
 except Exception as e:
-    print(f"RESULT: STREAM_FEHLER={type(e).__name__}: {e}")
+    print(f"RESULT: FEHLER={type(e).__name__}: {e}")
 
 finally:
-    try:
-        camera.stop_stream("mainStream")
-        print("RESULT: STOP_STREAM_OK")
-    except Exception as e:
-        print(f"RESULT: STOP_STREAM_FEHLER={type(e).__name__}: {e}")
-
     try:
         camera.close()
         print("RESULT: CLOSE_OK")
     except Exception as e:
         print(f"RESULT: CLOSE_FEHLER={type(e).__name__}: {e}")
-
-print(f"RESULT: DATEI_VORHANDEN={os.path.exists(OUT)}")
-
-if os.path.exists(OUT):
-    print(f"RESULT: DATEIGROESSE={os.path.getsize(OUT)}")
 
 print("RESULT: TEST_ENDE")
 PYTHON
@@ -90,7 +86,9 @@ PYTHON
 echo "RESULT: PYTHON_DATEI_ERSTELLT"
 echo "RESULT: STARTE_PYTHON"
 
-python3 /data/reolink_raw_stream_test.py
+python3 /data/reolink_password_test.py
 
-echo "RESULT: PYTHON_EXITCODE=$?"
+EXITCODE=$?
+
+echo "RESULT: PYTHON_EXITCODE=$EXITCODE"
 echo "RESULT: SHELL_ENDE"
