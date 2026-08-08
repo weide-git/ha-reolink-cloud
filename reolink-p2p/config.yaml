@@ -1,8 +1,9 @@
 name: Reolink P2P Test
-version: "0.1.1"
+version: "0.1.2"
 slug: reolink_p2p_test
 description: Testet Reolink UID/P2P mit PyNeolink
 url: https://github.com/weide-git/ha-reolink-cloud
+
 arch:
   - amd64
 
