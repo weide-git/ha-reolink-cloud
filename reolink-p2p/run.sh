@@ -9,7 +9,7 @@ USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
 echo "========================================"
-echo " Reolink P2P CLI Test"
+echo " Reolink PyNeolink API Diagnose"
 echo "========================================"
 echo
 echo "UID: ${UID_VALUE}"
@@ -35,27 +35,70 @@ cat > /data/pyneolink/config.json <<EOF
 }
 EOF
 
-PYNEOLINK="/usr/local/lib/python3.12/site-packages/pyneolink/cli.py"
-
 echo "========================================"
-echo " PyNeolink CLI"
+echo " Installierte PyNeolink-Dateien"
 echo "========================================"
 echo
 
-python "$PYNEOLINK" --help 2>&1 || true
+python - <<'PY'
+import pyneolink
+import os
+
+print("PyNeolink Modul:")
+print(pyneolink.__file__)
+print()
+
+base = os.path.dirname(pyneolink.__file__)
+
+for root, dirs, files in os.walk(base):
+    for file in files:
+        if file.endswith(".py"):
+            print(os.path.join(root, file))
+PY
 
 echo
 echo "========================================"
-echo " PyNeolink Info"
+echo " Relevante Funktionen / Klassen"
 echo "========================================"
 echo
 
-python "$PYNEOLINK" \
-  info \
-  --camera "RLC-510WA" \
-  --config /data/pyneolink/config.json
+python - <<'PY'
+import pyneolink
+import os
+
+base = os.path.dirname(pyneolink.__file__)
+
+keywords = [
+    "stream",
+    "snapshot",
+    "video",
+    "camera",
+    "rtsp",
+    "live"
+]
+
+for root, dirs, files in os.walk(base):
+    for file in files:
+        if file.endswith(".py"):
+            path = os.path.join(root, file)
+
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+            except Exception:
+                continue
+
+            for number, line in enumerate(lines, 1):
+                lower = line.lower()
+
+                if any(keyword in lower for keyword in keywords):
+                    print(
+                        f"{path}:{number}: "
+                        f"{line.rstrip()}"
+                    )
+PY
 
 echo
 echo "========================================"
-echo " ENDE"
+echo " ENDE DER API-DIAGNOSE"
 echo "========================================"
