@@ -41,4 +41,3 @@ class ReolinkCloudCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Reolink Cloud."""
         return await self.api.test_connection()
-    
