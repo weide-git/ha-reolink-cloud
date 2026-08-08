@@ -3,80 +3,84 @@
 set -eu
 
 echo "========================================"
-echo " PyNeolink Versions- und API-Diagnose"
+echo " RESULT: PyNeolink API Diagnose"
 echo "========================================"
-echo
 
 python - <<'PY'
 import sys
 import inspect
+import pkgutil
 
-print("Python:")
-print(sys.version)
-print()
+print("RESULT: Python=" + sys.version.replace("\n", " "))
 
 try:
     import pyneolink
 
-    print("PyNeolink Modul:")
-    print(pyneolink.__file__)
-    print()
-
-    print("PyNeolink Version:")
-    print(getattr(pyneolink, "__version__", "nicht vorhanden"))
-    print()
+    print("RESULT: PYNEOLINK_FILE=" + str(pyneolink.__file__))
+    print("RESULT: PYNEOLINK_VERSION=" + str(
+        getattr(pyneolink, "__version__", "NICHT_VORHANDEN")
+    ))
 
 except Exception as e:
-    print("FEHLER beim Import von pyneolink:")
-    print(type(e).__name__, str(e))
-    raise
+    print("RESULT: PYNEOLINK_IMPORT_ERROR=" + repr(e))
+    sys.exit(1)
 
-print("========================================")
-print(" StreamServer")
-print("========================================")
-print()
+
+print("RESULT: STREAMSERVER_BEGIN")
 
 try:
     from pyneolink import StreamServer
 
-    print("StreamServer:")
-    print(StreamServer)
-    print()
+    print("RESULT: STREAMSERVER_CLASS=" + repr(StreamServer))
 
-    print("Signatur:")
-    print(inspect.signature(StreamServer))
-    print()
+    try:
+        print(
+            "RESULT: STREAMSERVER_SIGNATURE="
+            + str(inspect.signature(StreamServer))
+        )
+    except Exception as e:
+        print(
+            "RESULT: STREAMSERVER_SIGNATURE_ERROR="
+            + repr(e)
+        )
 
-    print("Dokumentation:")
-    print(inspect.getdoc(StreamServer) or "Keine Dokumentation vorhanden")
-    print()
+    try:
+        doc = inspect.getdoc(StreamServer)
+        if doc:
+            for line in doc.splitlines():
+                print("RESULT: STREAMSERVER_DOC=" + line)
+        else:
+            print("RESULT: STREAMSERVER_DOC=NONE")
+    except Exception as e:
+        print(
+            "RESULT: STREAMSERVER_DOC_ERROR="
+            + repr(e)
+        )
 
 except Exception as e:
-    print("FEHLER bei StreamServer:")
-    print(type(e).__name__, str(e))
-    print()
+    print("RESULT: STREAMSERVER_IMPORT_ERROR=" + repr(e))
 
-print("========================================")
-print(" PyNeolink Module")
-print("========================================")
-print()
+
+print("RESULT: STREAMSERVER_END")
+print("RESULT: MODULES_BEGIN")
 
 try:
-    import pkgutil
     import pyneolink
 
     for module in pkgutil.walk_packages(
         pyneolink.__path__,
         pyneolink.__name__ + "."
     ):
-        print(module.name)
+        print("RESULT: MODULE=" + module.name)
 
 except Exception as e:
-    print("Fehler beim Auflisten:")
-    print(type(e).__name__, str(e))
+    print("RESULT: MODULE_SCAN_ERROR=" + repr(e))
 
-print()
 
-print("========================================")
-print(" ENDE DER DIAGNOSE")
-print("========================================")
+print("RESULT: MODULES_END")
+print("RESULT: DIAGNOSE_END")
+PY
+
+echo "========================================"
+echo " RESULT: Shell Ende"
+echo "========================================"
