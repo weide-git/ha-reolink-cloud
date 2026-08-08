@@ -9,7 +9,7 @@ USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
 echo "========================================"
-echo " Reolink P2P Authentication Test"
+echo " Reolink P2P CLI Test"
 echo "========================================"
 echo
 echo "UID: ${UID_VALUE}"
@@ -35,33 +35,27 @@ cat > /data/pyneolink/config.json <<EOF
 }
 EOF
 
-echo "========================================"
-echo " Konfiguration"
-echo "========================================"
-echo
-echo "UID: ${UID_VALUE}"
-echo "Username: ${USERNAME_VALUE}"
-echo "Discovery: relay"
-echo "Password: [VERBORGEN]"
-echo
+PYNEOLINK="/usr/local/lib/python3.12/site-packages/pyneolink/cli.py"
 
 echo "========================================"
-echo " P2P Login / Info"
+echo " PyNeolink CLI"
 echo "========================================"
 echo
 
-python /usr/local/lib/python3.12/site-packages/pyneolink/cli.py \
+python "$PYNEOLINK" --help 2>&1 || true
+
+echo
+echo "========================================"
+echo " PyNeolink Info"
+echo "========================================"
+echo
+
+python "$PYNEOLINK" \
   info \
   --camera "RLC-510WA" \
   --config /data/pyneolink/config.json
 
-RESULT=$?
-
 echo
 echo "========================================"
-echo " Ergebnis"
+echo " ENDE"
 echo "========================================"
-echo "Exit-Code: ${RESULT}"
-echo
-
-exit ${RESULT}
