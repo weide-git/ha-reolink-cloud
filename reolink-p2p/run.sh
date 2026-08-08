@@ -3,6 +3,7 @@
 set -u
 
 OPTIONS="/data/options.json"
+PYFILE="/data/reolink_test.py"
 
 UID_VALUE="$(jq -r '.uid' "$OPTIONS")"
 USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
@@ -11,15 +12,11 @@ PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 echo "========================================"
 echo " REOLINK CAMERA CONNECTION TEST"
 echo "========================================"
-echo
 
-echo "RESULT: PYTHON_START"
-
-python -u - <<PY
-import sys
+cat > "$PYFILE" <<PYTHON
 import traceback
 
-print("RESULT: PYTHON_OK", flush=True)
+print("RESULT: PYTHON_START", flush=True)
 
 try:
     import pyneolink
@@ -34,18 +31,16 @@ try:
 
     print("RESULT: CAMERA_IMPORT_OK", flush=True)
 
-except Exception as e:
-    print("RESULT: IMPORT_ERROR=" + repr(e), flush=True)
-    traceback.print_exc()
-    sys.exit(1)
+    uid = "${UID_VALUE}"
+    username = "${USERNAME_VALUE}"
+    password = "${PASSWORD_VALUE}"
 
-print("RESULT: ERZEUGE_CAMERA", flush=True)
+    print("RESULT: ERZEUGE_CAMERA", flush=True)
 
-try:
     camera = Camera(
-        uid="${UID_VALUE}",
-        username="${USERNAME_VALUE}",
-        password="${PASSWORD_VALUE}",
+        uid=uid,
+        username=username,
+        password=password,
         discovery="relay",
         stream="subStream",
         timeout=30.0,
@@ -53,43 +48,36 @@ try:
     )
 
     print("RESULT: CAMERA_ERZEUGT", flush=True)
-    print("RESULT: CAMERA_TYP=" + str(type(camera)), flush=True)
 
-except Exception as e:
-    print("RESULT: CAMERA_ERZEUGUNG_FEHLER=" + repr(e), flush=True)
+    print(
+        "RESULT: CAMERA_TYP="
+        + str(type(camera)),
+        flush=True
+    )
+
+    print("RESULT: TEST_OBJEKT_ERFOLGREICH", flush=True)
+
+except BaseException as e:
+    print(
+        "RESULT: FEHLER="
+        + repr(e),
+        flush=True
+    )
+
     traceback.print_exc()
-    sys.exit(2)
 
-print("RESULT: CAMERA_METHODEN", flush=True)
+print("RESULT: PYTHON_ENDE", flush=True)
+PYTHON
 
-for name in dir(camera):
-    if not name.startswith("_"):
-        try:
-            obj = getattr(camera, name)
-            if callable(obj):
-                print("RESULT: METHOD=" + name, flush=True)
-        except Exception:
-            pass
+echo "RESULT: PYTHON_DATEI_ERSTELLT"
+echo "RESULT: STARTE_PYTHON"
 
-print("RESULT: SUCHE_CONNECT", flush=True)
+python -u "$PYFILE"
 
-if hasattr(camera, "connect"):
-    print("RESULT: CONNECT_VORHANDEN", flush=True)
-
-    try:
-        result = camera.connect()
-        print("RESULT: CONNECT_ERGEBNIS=" + repr(result), flush=True)
-    except Exception as e:
-        print("RESULT: CONNECT_FEHLER=" + repr(e), flush=True)
-        traceback.print_exc()
-
-else:
-    print("RESULT: CONNECT_NICHT_VORHANDEN", flush=True)
-
-print("RESULT: TEST_ENDE", flush=True)
-PY
+RC="$?"
 
 echo
-echo "========================================"
-echo " RESULT: SHELL ENDE"
-echo "========================================"
+echo "RESULT: PYTHON_EXITCODE=$RC"
+echo "RESULT: SHELL_ENDE"
+
+exit "$RC"
