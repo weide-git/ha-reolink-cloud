@@ -9,7 +9,7 @@ USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
 echo "========================================"
-echo " Reolink PyNeolink API Diagnose"
+echo " Reolink UID/P2P Live Server"
 echo "========================================"
 echo
 echo "UID: ${UID_VALUE}"
@@ -18,6 +18,39 @@ echo "Passwort gesetzt: $(if [ -n "$PASSWORD_VALUE" ]; then echo JA; else echo N
 echo
 
 mkdir -p /data/pyneolink
+
+cat > /data/pyneolink/start_stream.py <<'PY'
+import json
+import sys
+
+from pyneolink import StreamServer
+
+CONFIG_FILE = "/data/pyneolink/config.json"
+
+with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+    config = json.load(f)
+
+print("========================================")
+print(" Starte PyNeolink StreamServer")
+print("========================================")
+print()
+print("Bind-Adresse:", config["bind"])
+print("RTSP/Stream-Port:", config["bind_port"])
+print("Kamera:", config["cameras"][0]["name"])
+print()
+
+server = StreamServer(
+    config,
+    buffer_seconds=1.5,
+    hls_buffer_mb=100,
+    hls_segment_seconds=2,
+)
+
+print("StreamServer wird gestartet...")
+print()
+
+server.serve_forever()
+PY
 
 cat > /data/pyneolink/config.json <<EOF
 {
@@ -35,70 +68,12 @@ cat > /data/pyneolink/config.json <<EOF
 }
 EOF
 
+echo "Konfiguration erstellt."
+echo
+
 echo "========================================"
-echo " Installierte PyNeolink-Dateien"
+echo " Starte Live-Stream"
 echo "========================================"
 echo
 
-python - <<'PY'
-import pyneolink
-import os
-
-print("PyNeolink Modul:")
-print(pyneolink.__file__)
-print()
-
-base = os.path.dirname(pyneolink.__file__)
-
-for root, dirs, files in os.walk(base):
-    for file in files:
-        if file.endswith(".py"):
-            print(os.path.join(root, file))
-PY
-
-echo
-echo "========================================"
-echo " Relevante Funktionen / Klassen"
-echo "========================================"
-echo
-
-python - <<'PY'
-import pyneolink
-import os
-
-base = os.path.dirname(pyneolink.__file__)
-
-keywords = [
-    "stream",
-    "snapshot",
-    "video",
-    "camera",
-    "rtsp",
-    "live"
-]
-
-for root, dirs, files in os.walk(base):
-    for file in files:
-        if file.endswith(".py"):
-            path = os.path.join(root, file)
-
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-            except Exception:
-                continue
-
-            for number, line in enumerate(lines, 1):
-                lower = line.lower()
-
-                if any(keyword in lower for keyword in keywords):
-                    print(
-                        f"{path}:{number}: "
-                        f"{line.rstrip()}"
-                    )
-PY
-
-echo
-echo "========================================"
-echo " ENDE DER API-DIAGNOSE"
-echo "========================================"
+python /data/pyneolink/start_stream.py
