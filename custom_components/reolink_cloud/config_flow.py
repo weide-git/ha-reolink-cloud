@@ -5,9 +5,8 @@ from __future__ import annotations
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 
-from . import DOMAIN
+from .const import CONF_TOKEN, DOMAIN
 
 
 class ReolinkCloudConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -20,17 +19,15 @@ class ReolinkCloudConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             return self.async_create_entry(
-                title=user_input[CONF_USERNAME],
+                title="Reolink Cloud",
                 data={
-                    CONF_USERNAME: user_input[CONF_USERNAME],
-                    CONF_PASSWORD: user_input[CONF_PASSWORD],
+                    CONF_TOKEN: user_input[CONF_TOKEN],
                 },
             )
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_USERNAME): str,
-                vol.Required(CONF_PASSWORD): str,
+                vol.Required(CONF_TOKEN): str,
             }
         )
 
