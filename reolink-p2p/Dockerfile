@@ -1,14 +1,14 @@
-FROM python:3.12-slim
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20
 
-WORKDIR /app
+FROM ${BUILD_FROM}
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends jq \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /data
 
-RUN python -m pip install --no-cache-dir pyneolink==0.4.0
+RUN pip install --no-cache-dir pyneolink==0.4.0
 
-COPY run.sh /app/run.sh
-RUN chmod +x /app/run.sh
+COPY run.sh /run.sh
+COPY reolink_raw_udp_test.py /data/reolink_raw_udp_test.py
 
-CMD ["/app/run.sh"]
+RUN chmod a+x /run.sh
+
+CMD ["/run.sh"]
