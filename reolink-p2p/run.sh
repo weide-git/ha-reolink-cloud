@@ -9,7 +9,7 @@ USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
 echo "========================================"
-echo " Reolink UID/P2P Live Test"
+echo " Reolink P2P Diagnostic"
 echo "========================================"
 echo "UID: ${UID_VALUE}"
 echo "Benutzer: ${USERNAME_VALUE}"
@@ -34,13 +34,23 @@ cat > /data/pyneolink/config.json <<EOF
 }
 EOF
 
-echo "Konfiguration erstellt."
-echo
+echo "========================================"
+echo " PyNeolink Version"
+echo "========================================"
 
-echo "========================================"
-echo " Kamera-Verbindung"
-echo "========================================"
+python -m pip show pyneolink || true
+
 echo
+echo "========================================"
+echo " PyNeolink CLI Hilfe"
+echo "========================================"
+
+python /usr/local/lib/python3.12/site-packages/pyneolink/cli.py --help
+
+echo
+echo "========================================"
+echo " Kamera-Info / P2P-Test"
+echo "========================================"
 
 python /usr/local/lib/python3.12/site-packages/pyneolink/cli.py \
   info \
@@ -49,16 +59,8 @@ python /usr/local/lib/python3.12/site-packages/pyneolink/cli.py \
 
 echo
 echo "========================================"
-echo " Starte PyNeolink Live-Server"
+echo " TEST ENDE"
 echo "========================================"
+echo "Wenn du diese Zeile siehst, wurde run.sh"
+echo "vollständig ausgeführt."
 echo
-echo "RTSP-Port: 8554"
-echo "Kamera: RLC-510WA"
-echo
-echo "Der Server bleibt jetzt aktiv."
-echo
-
-exec python /usr/local/lib/python3.12/site-packages/pyneolink/cli.py \
-  live \
-  --camera "RLC-510WA" \
-  --config /data/pyneolink/config.json
