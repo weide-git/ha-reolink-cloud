@@ -3,84 +3,92 @@
 set -eu
 
 echo "========================================"
-echo " RESULT: PyNeolink API Diagnose"
+echo " Reolink PyNeolink Camera/Media API"
 echo "========================================"
+echo
 
 python - <<'PY'
-import sys
 import inspect
-import pkgutil
 
-print("RESULT: Python=" + sys.version.replace("\n", " "))
-
-try:
-    import pyneolink
-
-    print("RESULT: PYNEOLINK_FILE=" + str(pyneolink.__file__))
-    print("RESULT: PYNEOLINK_VERSION=" + str(
-        getattr(pyneolink, "__version__", "NICHT_VORHANDEN")
-    ))
-
-except Exception as e:
-    print("RESULT: PYNEOLINK_IMPORT_ERROR=" + repr(e))
-    sys.exit(1)
-
-
-print("RESULT: STREAMSERVER_BEGIN")
+print("RESULT: CAMERA_BEGIN")
 
 try:
-    from pyneolink import StreamServer
+    import pyneolink.camera as camera
 
-    print("RESULT: STREAMSERVER_CLASS=" + repr(StreamServer))
+    print("RESULT: CAMERA_FILE=" + str(camera.__file__))
 
-    try:
-        print(
-            "RESULT: STREAMSERVER_SIGNATURE="
-            + str(inspect.signature(StreamServer))
-        )
-    except Exception as e:
-        print(
-            "RESULT: STREAMSERVER_SIGNATURE_ERROR="
-            + repr(e)
-        )
+    for name, obj in inspect.getmembers(camera):
+        if inspect.isclass(obj) or inspect.isfunction(obj):
+            print("RESULT: CAMERA_OBJECT=" + name)
 
-    try:
-        doc = inspect.getdoc(StreamServer)
-        if doc:
-            for line in doc.splitlines():
-                print("RESULT: STREAMSERVER_DOC=" + line)
-        else:
-            print("RESULT: STREAMSERVER_DOC=NONE")
-    except Exception as e:
-        print(
-            "RESULT: STREAMSERVER_DOC_ERROR="
-            + repr(e)
-        )
+            try:
+                print(
+                    "RESULT: CAMERA_SIGNATURE="
+                    + name
+                    + "="
+                    + str(inspect.signature(obj))
+                )
+            except Exception:
+                pass
 
 except Exception as e:
-    print("RESULT: STREAMSERVER_IMPORT_ERROR=" + repr(e))
+    print("RESULT: CAMERA_ERROR=" + repr(e))
 
+print("RESULT: CAMERA_END")
+print()
 
-print("RESULT: STREAMSERVER_END")
-print("RESULT: MODULES_BEGIN")
+print("RESULT: MEDIA_BEGIN")
 
 try:
-    import pyneolink
+    import pyneolink.core.media as media
 
-    for module in pkgutil.walk_packages(
-        pyneolink.__path__,
-        pyneolink.__name__ + "."
-    ):
-        print("RESULT: MODULE=" + module.name)
+    print("RESULT: MEDIA_FILE=" + str(media.__file__))
+
+    for name, obj in inspect.getmembers(media):
+        if inspect.isclass(obj) or inspect.isfunction(obj):
+            print("RESULT: MEDIA_OBJECT=" + name)
+
+            try:
+                print(
+                    "RESULT: MEDIA_SIGNATURE="
+                    + name
+                    + "="
+                    + str(inspect.signature(obj))
+                )
+            except Exception:
+                pass
 
 except Exception as e:
-    print("RESULT: MODULE_SCAN_ERROR=" + repr(e))
+    print("RESULT: MEDIA_ERROR=" + repr(e))
 
+print("RESULT: MEDIA_END")
+print()
 
-print("RESULT: MODULES_END")
+print("RESULT: STREAM_SERVER_BEGIN")
+
+try:
+    import pyneolink.stream_server as ss
+
+    print("RESULT: STREAM_SERVER_FILE=" + str(ss.__file__))
+
+    for name, obj in inspect.getmembers(ss):
+        if inspect.isclass(obj) or inspect.isfunction(obj):
+            print("RESULT: STREAM_OBJECT=" + name)
+
+            try:
+                print(
+                    "RESULT: STREAM_SIGNATURE="
+                    + name
+                    + "="
+                    + str(inspect.signature(obj))
+                )
+            except Exception:
+                pass
+
+except Exception as e:
+    print("RESULT: STREAM_ERROR=" + repr(e))
+
+print("RESULT: STREAM_SERVER_END")
+print()
 print("RESULT: DIAGNOSE_END")
 PY
-
-echo "========================================"
-echo " RESULT: Shell Ende"
-echo "========================================"
