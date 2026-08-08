@@ -1,7 +1,7 @@
 #!/bin/sh
 
 echo "========================================"
-echo " REOLINK P2P PASSWORD TEST"
+echo " REOLINK P2P LOGIN TEST"
 echo "========================================"
 
 PASSWORD="$(python3 -c '
@@ -22,7 +22,7 @@ fi
 
 export REOLINK_PASSWORD="$PASSWORD"
 
-cat > /data/reolink_password_test.py <<'PYTHON'
+cat > /data/reolink_login_test.py <<'PYTHON'
 import os
 import pyneolink
 
@@ -53,8 +53,7 @@ camera = Camera(
 )
 
 print("RESULT: CAMERA_ERZEUGT")
-print(f"RESULT: CAMERA_PASSWORD_GESETZT={bool(camera.password)}")
-print(f"RESULT: CAMERA_PASSWORD_LAENGE={len(camera.password)}")
+print(f"RESULT: CAMERA_TYP={type(camera)}")
 
 try:
     print("RESULT: CONNECT_START")
@@ -71,7 +70,7 @@ try:
     print(f"RESULT: LOGIN_RESULT={result}")
 
 except Exception as e:
-    print(f"RESULT: FEHLER={type(e).__name__}: {e}")
+    print(f"RESULT: LOGIN_FEHLER={type(e).__name__}: {e}")
 
 finally:
     try:
@@ -86,7 +85,7 @@ PYTHON
 echo "RESULT: PYTHON_DATEI_ERSTELLT"
 echo "RESULT: STARTE_PYTHON"
 
-python3 /data/reolink_password_test.py
+python3 /data/reolink_login_test.py
 
 EXITCODE=$?
 
