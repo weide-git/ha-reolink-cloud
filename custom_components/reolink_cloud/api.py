@@ -13,34 +13,32 @@ class ReolinkCloudApi:
     def __init__(
         self,
         session: aiohttp.ClientSession,
-        username: str,
-        password: str,
+        token: str,
     ) -> None:
         """Initialize the API client."""
         self._session = session
-        self._username = username
-        self._password = password
-        self._token: str | None = None
+        self._token = token.strip()
 
-    async def login(self) -> dict[str, Any]:
-        """Authenticate against Reolink Cloud.
+    async def test_connection(self) -> dict[str, Any]:
+        """Test authenticated access to Reolink Cloud."""
 
-        The exact cloud authentication endpoint is intentionally kept
-        isolated here while the current API is being verified.
-        """
-        # Temporary diagnostic request only.
-        # No credentials are sent yet.
-        url = "https://apis.reolink.com/"
+        url = "https://apis.reolink.com/v2/cloud/videos/records/"
+
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Accept": "application/json",
+            "User-Agent": "HomeAssistant-ReolinkCloud/0.2.0",
+        }
 
         async with self._session.get(
             url,
-            headers={
-                "User-Agent": "HomeAssistant-ReolinkCloud/0.1.0",
-                "Accept": "application/json",
-            },
-            timeout=aiohttp.ClientTimeout(total=15),
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=20),
         ) as response:
+            text = await response.text()
+
             return {
                 "status": response.status,
-                "url": str(response.url),
+                "content_type": response.headers.get("content-type"),
+                "body": text[:10000],
             }
