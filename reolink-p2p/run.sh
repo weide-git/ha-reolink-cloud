@@ -3,18 +3,19 @@
 set -u
 
 OPTIONS="/data/options.json"
-PYFILE="/data/reolink_test.py"
+PYFILE="/data/reolink_connect_test.py"
 
 UID_VALUE="$(jq -r '.uid' "$OPTIONS")"
 USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
 echo "========================================"
-echo " REOLINK CAMERA CONNECTION TEST"
+echo " REOLINK P2P CONNECT TEST"
 echo "========================================"
 
 cat > "$PYFILE" <<PYTHON
 import traceback
+import time
 
 print("RESULT: PYTHON_START", flush=True)
 
@@ -31,16 +32,10 @@ try:
 
     print("RESULT: CAMERA_IMPORT_OK", flush=True)
 
-    uid = "${UID_VALUE}"
-    username = "${USERNAME_VALUE}"
-    password = "${PASSWORD_VALUE}"
-
-    print("RESULT: ERZEUGE_CAMERA", flush=True)
-
     camera = Camera(
-        uid=uid,
-        username=username,
-        password=password,
+        uid="${UID_VALUE}",
+        username="${USERNAME_VALUE}",
+        password="${PASSWORD_VALUE}",
         discovery="relay",
         stream="subStream",
         timeout=30.0,
@@ -48,18 +43,38 @@ try:
     )
 
     print("RESULT: CAMERA_ERZEUGT", flush=True)
+    print("RESULT: STARTE_CONNECT", flush=True)
 
-    print(
-        "RESULT: CAMERA_TYP="
-        + str(type(camera)),
-        flush=True
-    )
+    if not hasattr(camera, "connect"):
+        print("RESULT: KEIN_CONNECT_METHOD", flush=True)
+    else:
+        print("RESULT: CONNECT_METHOD_VORHANDEN", flush=True)
 
-    print("RESULT: TEST_OBJEKT_ERFOLGREICH", flush=True)
+        try:
+            result = camera.connect()
+
+            print(
+                "RESULT: CONNECT_ERGEBNIS="
+                + repr(result),
+                flush=True
+            )
+
+            print("RESULT: CONNECT_ERFOLGREICH", flush=True)
+
+        except BaseException as e:
+            print(
+                "RESULT: CONNECT_FEHLER="
+                + repr(e),
+                flush=True
+            )
+
+            traceback.print_exc()
+
+    print("RESULT: TEST_ENDE", flush=True)
 
 except BaseException as e:
     print(
-        "RESULT: FEHLER="
+        "RESULT: HAUPTFEHLER="
         + repr(e),
         flush=True
     )
@@ -76,7 +91,6 @@ python -u "$PYFILE"
 
 RC="$?"
 
-echo
 echo "RESULT: PYTHON_EXITCODE=$RC"
 echo "RESULT: SHELL_ENDE"
 
