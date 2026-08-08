@@ -2,142 +2,81 @@
 
 set -eu
 
-OPTIONS="/data/options.json"
-
-UID_VALUE="$(jq -r '.uid' "$OPTIONS")"
-USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
-PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
-
 echo "========================================"
-echo " Reolink P2P Stream Timeout Test"
+echo " PyNeolink Versions- und API-Diagnose"
 echo "========================================"
 echo
-echo "UID: ${UID_VALUE}"
-echo "Benutzer: ${USERNAME_VALUE}"
-echo "Passwort gesetzt: $(if [ -n "$PASSWORD_VALUE" ]; then echo JA; else echo NEIN; fi)"
-echo
 
-mkdir -p /data/pyneolink
-
-cat > /data/pyneolink/config.json <<EOF
-{
-  "bind": "0.0.0.0",
-  "bind_port": 8554,
-  "cameras": [
-    {
-      "name": "RLC-510WA",
-      "username": "${USERNAME_VALUE}",
-      "password": "${PASSWORD_VALUE}",
-      "uid": "${UID_VALUE}",
-      "discovery": "relay"
-    }
-  ]
-}
-EOF
-
-cat > /data/pyneolink/start_stream.py <<'PY'
-import json
-import signal
+python - <<'PY'
 import sys
-import traceback
+import inspect
 
-from pyneolink import StreamServer
-
-CONFIG_FILE = "/data/pyneolink/config.json"
-
-print("========================================")
-print(" PyNeolink StreamServer Test")
-print("========================================")
-print()
-
-print("Lese Konfiguration ...")
-
-with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-    config = json.load(f)
-
-print("Konfiguration gelesen.")
-print("Kamera:", config["cameras"][0]["name"])
-print("UID:", config["cameras"][0]["uid"])
-print("Discovery:", config["cameras"][0].get("discovery"))
-print("Bind:", config["bind"])
-print("Port:", config["bind_port"])
-print()
-
-print("Erzeuge StreamServer ...")
-
-try:
-    server = StreamServer(
-        config,
-        buffer_seconds=1.5,
-        hls_buffer_mb=100,
-        hls_segment_seconds=2,
-    )
-
-    print("StreamServer wurde erzeugt.")
-    print()
-
-except Exception as e:
-    print("FEHLER beim Erzeugen des StreamServers:")
-    print(type(e).__name__, str(e))
-    traceback.print_exc()
-    sys.exit(1)
-
-
-def timeout_handler(signum, frame):
-    print()
-    print("========================================")
-    print(" TIMEOUT")
-    print("========================================")
-    print()
-    print("Nach 15 Sekunden wurde kein weiterer")
-    print("Fortschritt vom StreamServer gemeldet.")
-    print()
-    print("Der Prozess wird jetzt beendet.")
-    sys.exit(124)
-
-
-signal.signal(signal.SIGALRM, timeout_handler)
-signal.alarm(15)
-
-print("Starte server.serve_forever() ...")
-print("Timeout: 15 Sekunden")
+print("Python:")
+print(sys.version)
 print()
 
 try:
-    server.serve_forever()
+    import pyneolink
+
+    print("PyNeolink Modul:")
+    print(pyneolink.__file__)
+    print()
+
+    print("PyNeolink Version:")
+    print(getattr(pyneolink, "__version__", "nicht vorhanden"))
+    print()
 
 except Exception as e:
-    print()
-    print("========================================")
-    print(" FEHLER IM STREAMSERVER")
-    print("========================================")
-    print()
+    print("FEHLER beim Import von pyneolink:")
     print(type(e).__name__, str(e))
-    traceback.print_exc()
-    sys.exit(1)
+    raise
 
-finally:
-    signal.alarm(0)
+print("========================================")
+print(" StreamServer")
+print("========================================")
+print()
+
+try:
+    from pyneolink import StreamServer
+
+    print("StreamServer:")
+    print(StreamServer)
+    print()
+
+    print("Signatur:")
+    print(inspect.signature(StreamServer))
+    print()
+
+    print("Dokumentation:")
+    print(inspect.getdoc(StreamServer) or "Keine Dokumentation vorhanden")
+    print()
+
+except Exception as e:
+    print("FEHLER bei StreamServer:")
+    print(type(e).__name__, str(e))
+    print()
+
+print("========================================")
+print(" PyNeolink Module")
+print("========================================")
+print()
+
+try:
+    import pkgutil
+    import pyneolink
+
+    for module in pkgutil.walk_packages(
+        pyneolink.__path__,
+        pyneolink.__name__ + "."
+    ):
+        print(module.name)
+
+except Exception as e:
+    print("Fehler beim Auflisten:")
+    print(type(e).__name__, str(e))
 
 print()
+
 print("========================================")
-print(" STREAMSERVER BEENDET")
+print(" ENDE DER DIAGNOSE")
 print("========================================")
-PY
-
-echo "========================================"
-echo " Starte Live-Stream-Test"
-echo "========================================"
-echo
-
-python /data/pyneolink/start_stream.py
-
-RESULT=$?
-
-echo
-echo "========================================"
-echo " TEST ENDE"
-echo " Exit-Code: ${RESULT}"
-echo "========================================"
-
-exit "$RESULT"
