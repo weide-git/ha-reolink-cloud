@@ -1,126 +1,124 @@
 #!/bin/sh
 
-set -eu
+set -u
 
 OPTIONS="/data/options.json"
+LOG="/data/reolink_debug.log"
+
+rm -f "$LOG"
 
 UID_VALUE="$(jq -r '.uid' "$OPTIONS")"
 USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
-OUT="/data/reolink_test.mp4"
-
-rm -f "$OUT"
-
 echo "========================================"
-echo " Reolink DIREKTER P2P STREAM TEST"
+echo " REOLINK P2P DEBUG"
 echo "========================================"
 echo
-echo "UID: ${UID_VALUE}"
-echo "Benutzer: ${USERNAME_VALUE}"
-echo "Discovery: relay"
+echo "RESULT: UID=${UID_VALUE}"
+echo "RESULT: USERNAME=${USERNAME_VALUE}"
+echo "RESULT: PYNEOLINK_VERSION=$(python -c 'import pyneolink; print(getattr(pyneolink, "__version__", "unknown"))')"
 echo
-echo "PyNeolink:"
-python -c 'import pyneolink; print(getattr(pyneolink, "__version__", "unbekannt"))'
+echo "RESULT: STARTE_PYTHON"
 echo
-echo "========================================"
-echo " Starte Kamera"
-echo "========================================"
 
-python - <<PY
+python -u - <<PY 2>&1 | tee "$LOG"
 import sys
-import time
 import traceback
+import time
+import os
 
-from pyneolink.camera import Camera
-from pyneolink.camera import StreamRecorder
-
-uid = "${UID_VALUE}"
-username = "${USERNAME_VALUE}"
-password = "${PASSWORD_VALUE}"
-
-print("RESULT: CAMERA_ERSTELLEN")
-
-camera = Camera(
-    uid=uid,
-    username=username,
-    password=password,
-    discovery="relay",
-    stream="both",
-    timeout=30.0,
-    debug=True,
-)
-
-print("RESULT: CAMERA_ERSTELLT")
-print("RESULT: STARTE_STREAM=SUBSTREAM")
-print("RESULT: ZIEL=/data/reolink_test.mp4")
+print("PYTHON: gestartet", flush=True)
 
 try:
-    recorder = StreamRecorder(
-        camera,
-        out="/data/reolink_test.mp4",
-        stream="subStream",
-        duration=10.0,
+    import pyneolink
+    print(
+        "PYTHON: PyNeolink="
+        + str(getattr(pyneolink, "__version__", "unknown")),
+        flush=True
     )
 
-    print("RESULT: RECORDER_ERSTELLT")
-    print("RESULT: STARTE_AUFNAHME")
+    from pyneolink.camera import Camera
 
-    recorder.start()
+    print("PYTHON: Camera importiert", flush=True)
 
-    print("RESULT: AUFNAHME_GESTARTET")
+    uid = "${UID_VALUE}"
+    username = "${USERNAME_VALUE}"
+    password = "${PASSWORD_VALUE}"
 
-    start = time.time()
+    print("PYTHON: Erzeuge Camera-Objekt", flush=True)
 
-    while time.time() - start < 15:
-        time.sleep(1)
+    camera = Camera(
+        uid=uid,
+        username=username,
+        password=password,
+        discovery="relay",
+        stream="subStream",
+        timeout=30.0,
+        debug=True,
+    )
+
+    print("PYTHON: Camera-Objekt ERZEUGT", flush=True)
+
+    print("PYTHON: Objekt=", repr(camera), flush=True)
+
+    print("PYTHON: Suche Methoden...", flush=True)
+
+    for name in dir(camera):
+        if not name.startswith("_"):
+            try:
+                attr = getattr(camera, name)
+                if callable(attr):
+                    print(
+                        "PYTHON: METHOD="
+                        + name,
+                        flush=True
+                    )
+            except Exception:
+                pass
+
+    print("PYTHON: Versuche Verbindung", flush=True)
+
+    try:
+        result = camera.connect()
         print(
-            "RESULT: WARTE="
-            + str(int(time.time() - start))
-            + "s"
+            "PYTHON: CONNECT_RESULT="
+            + repr(result),
+            flush=True
         )
+    except Exception as e:
+        print(
+            "PYTHON: CONNECT_FEHLER="
+            + repr(e),
+            flush=True
+        )
+        traceback.print_exc()
 
-    print("RESULT: WARTEZEIT_ERREICHT")
+    print("PYTHON: Test beendet", flush=True)
 
-except Exception as e:
-    print("RESULT: STREAM_FEHLER=" + repr(e))
+except BaseException as e:
+    print(
+        "PYTHON: GLOBALER_FEHLER="
+        + repr(e),
+        flush=True
+    )
     traceback.print_exc()
-    sys.exit(2)
 
-finally:
-    try:
-        recorder.stop()
-        print("RESULT: RECORDER_STOP")
-    except Exception as e:
-        print("RESULT: RECORDER_STOP_FEHLER=" + repr(e))
-
-    try:
-        camera.close()
-        print("RESULT: CAMERA_CLOSE")
-    except Exception as e:
-        print("RESULT: CAMERA_CLOSE_FEHLER=" + repr(e))
-
-print("RESULT: TEST_ENDE")
+print("PYTHON: ENDE", flush=True)
 PY
 
 echo
 echo "========================================"
-echo " Ergebnis"
+echo " LOGDATEI"
 echo "========================================"
 
-if [ -f "$OUT" ]; then
-    SIZE="$(stat -c '%s' "$OUT" 2>/dev/null || echo 0)"
-    echo "RESULT: DATEI_VORHANDEN=JA"
-    echo "RESULT: DATEIGROESSE=${SIZE}"
-
-    if [ "$SIZE" -gt 0 ]; then
-        echo "RESULT: VIDEO_DATEN=JA"
-    else
-        echo "RESULT: VIDEO_DATEN=NEIN"
-    fi
+if [ -f "$LOG" ]; then
+    cat "$LOG"
 else
-    echo "RESULT: DATEI_VORHANDEN=NEIN"
+    echo "RESULT: KEINE_LOGDATEI"
 fi
 
 echo
-echo "RESULT: TEST_ABGESCHLOSSEN"
+echo "========================================"
+echo " ENDE"
+echo "========================================"
