@@ -9,15 +9,17 @@ USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
 echo "========================================"
-echo " Reolink UID/P2P Test"
+echo " Reolink UID/P2P Snapshot Test"
 echo "========================================"
 echo "UID: ${UID_VALUE}"
 echo "Benutzer: ${USERNAME_VALUE}"
 echo "P2P Discovery: relay"
 echo
-echo "Erstelle PyNeolink-Konfiguration..."
 
 mkdir -p /data/pyneolink
+mkdir -p /data/snapshots
+
+echo "Erstelle PyNeolink-Konfiguration..."
 
 cat > /data/pyneolink/config.json <<EOF
 {
@@ -36,10 +38,32 @@ cat > /data/pyneolink/config.json <<EOF
 EOF
 
 echo "Konfiguration erstellt."
-echo "Starte P2P-Informationstest..."
+echo
+echo "========================================"
+echo " Kamera-Informationen"
+echo "========================================"
 echo
 
-exec python /usr/local/lib/python3.12/site-packages/pyneolink/cli.py \
+python /usr/local/lib/python3.12/site-packages/pyneolink/cli.py \
   info \
   --camera "RLC-510WA" \
   --config /data/pyneolink/config.json
+
+echo
+echo "========================================"
+echo " Snapshot"
+echo "========================================"
+echo
+
+python /usr/local/lib/python3.12/site-packages/pyneolink/cli.py \
+  snapshot \
+  --camera "RLC-510WA" \
+  --out /data/snapshots/
+
+echo
+echo "========================================"
+echo " Snapshot-Test beendet"
+echo "========================================"
+echo
+
+ls -lah /data/snapshots/
