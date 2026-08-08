@@ -26,9 +26,10 @@ async def async_setup_entry(
     session = async_get_clientsession(hass)
 
     coordinator = ReolinkCloudCoordinator(
-        hass,
-        session,
-    )
+    hass,
+    session,
+    entry.data["token"],
+)
 
     await coordinator.async_config_entry_first_refresh()
 
