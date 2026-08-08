@@ -3,6 +3,7 @@
   "name": "Reolink Cloud",
   "version": "0.1.0",
   "documentation": "https://github.com/weide-git/ha-reolink-cloud",
+  "issue_tracker": "https://github.com/weide-git/ha-reolink-cloud/issues",
   "codeowners": [],
   "config_flow": true,
   "iot_class": "cloud_polling",
