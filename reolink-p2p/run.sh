@@ -3,25 +3,25 @@
 set -u
 
 OPTIONS="/data/options.json"
-PYFILE="/data/reolink_connect_test.py"
+PYFILE="/data/reolink_media_test.py"
 
 UID_VALUE="$(jq -r '.uid' "$OPTIONS")"
 USERNAME_VALUE="$(jq -r '.username' "$OPTIONS")"
 PASSWORD_VALUE="$(jq -r '.password' "$OPTIONS")"
 
 echo "========================================"
-echo " REOLINK P2P CONNECT TEST"
+echo " REOLINK P2P MEDIA TEST"
 echo "========================================"
 
 cat > "$PYFILE" <<PYTHON
 import traceback
+import inspect
 import time
 
 print("RESULT: PYTHON_START", flush=True)
 
 try:
     import pyneolink
-
     print(
         "RESULT: PYNEOLINK_VERSION="
         + str(getattr(pyneolink, "__version__", "unknown")),
@@ -29,7 +29,6 @@ try:
     )
 
     from pyneolink.camera import Camera
-
     print("RESULT: CAMERA_IMPORT_OK", flush=True)
 
     camera = Camera(
@@ -43,38 +42,73 @@ try:
     )
 
     print("RESULT: CAMERA_ERZEUGT", flush=True)
-    print("RESULT: STARTE_CONNECT", flush=True)
 
-    if not hasattr(camera, "connect"):
-        print("RESULT: KEIN_CONNECT_METHOD", flush=True)
-    else:
-        print("RESULT: CONNECT_METHOD_VORHANDEN", flush=True)
+    print("RESULT: CAMERA_METHODEN", flush=True)
 
-        try:
-            result = camera.connect()
+    for name in dir(camera):
+        if not name.startswith("_"):
+            try:
+                obj = getattr(camera, name)
 
-            print(
-                "RESULT: CONNECT_ERGEBNIS="
-                + repr(result),
-                flush=True
-            )
+                if callable(obj):
+                    try:
+                        sig = inspect.signature(obj)
+                    except Exception:
+                        sig = "?"
 
-            print("RESULT: CONNECT_ERFOLGREICH", flush=True)
+                    print(
+                        "RESULT: METHOD="
+                        + name
+                        + " "
+                        + str(sig),
+                        flush=True
+                    )
+            except Exception:
+                pass
 
-        except BaseException as e:
-            print(
-                "RESULT: CONNECT_FEHLER="
-                + repr(e),
-                flush=True
-            )
+    print("RESULT: CONNECT_START", flush=True)
 
-            traceback.print_exc()
+    camera.connect()
+
+    print("RESULT: CONNECT_OK", flush=True)
+
+    print("RESULT: SUCHE_STREAM_METHODEN", flush=True)
+
+    stream_names = [
+        name for name in dir(camera)
+        if (
+            "stream" in name.lower()
+            or "media" in name.lower()
+            or "read" in name.lower()
+            or "recv" in name.lower()
+        )
+    ]
+
+    for name in stream_names:
+        print(
+            "RESULT: STREAM_OBJECT="
+            + name,
+            flush=True
+        )
+
+    print("RESULT: TEST_30_SEKUNDEN", flush=True)
+
+    start = time.time()
+
+    while time.time() - start < 30:
+        print(
+            "RESULT: WARTEN "
+            + str(round(time.time() - start, 1))
+            + "s",
+            flush=True
+        )
+        time.sleep(5)
 
     print("RESULT: TEST_ENDE", flush=True)
 
 except BaseException as e:
     print(
-        "RESULT: HAUPTFEHLER="
+        "RESULT: FEHLER="
         + repr(e),
         flush=True
     )
