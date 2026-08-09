@@ -1,3 +1,4 @@
+print("RESULT: TEST_UMGEBUNG_START")
 import json
 import os
 import sys
