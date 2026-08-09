@@ -56,6 +56,32 @@ class ReolinkCloudApi:
             "uid": self._uid,
         }
 
+    def snapshot(self) -> bytes:
+        """Get a snapshot from the camera."""
+
+        if self._camera is None:
+            raise RuntimeError("Camera is not connected")
+
+        _LOGGER.info(
+            "Requesting snapshot from Reolink camera %s",
+            self._uid,
+        )
+
+        snapshot = self._camera.snapshot()
+
+        if not isinstance(snapshot, bytes):
+            raise TypeError(
+                "Reolink snapshot did not return bytes"
+            )
+
+        _LOGGER.info(
+            "Received snapshot from Reolink camera %s (%d bytes)",
+            self._uid,
+            len(snapshot),
+        )
+
+        return snapshot
+
     def close(self) -> None:
         """Close the P2P connection."""
 
