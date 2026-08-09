@@ -26,6 +26,12 @@ class ReolinkCloudApi:
         self._password = password
         self._camera: Camera | None = None
 
+    @property
+    def uid(self) -> str:
+        """Return the camera UID."""
+
+        return self._uid
+
     def connect(self) -> dict[str, Any]:
         """Connect to the camera using Reolink P2P."""
 
