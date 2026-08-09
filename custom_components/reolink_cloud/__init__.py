@@ -13,7 +13,7 @@ from .const import (
 )
 from .coordinator import ReolinkCloudCoordinator
 
-PLATFORMS: list[str] = []
+PLATFORMS: list[str] = ["camera"]
 
 
 async def async_setup(
@@ -43,6 +43,11 @@ async def async_setup_entry(
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    await hass.config_entries.async_forward_entry_setups(
+        entry,
+        PLATFORMS,
+    )
+
     return True
 
 
@@ -51,6 +56,11 @@ async def async_unload_entry(
     entry: ConfigEntry,
 ) -> bool:
     """Unload a Reolink P2P config entry."""
+
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry,
+        PLATFORMS,
+    )
 
     coordinator = hass.data[DOMAIN].pop(
         entry.entry_id,
@@ -62,4 +72,4 @@ async def async_unload_entry(
             coordinator.api.close
         )
 
-    return True
+    return unload_ok
