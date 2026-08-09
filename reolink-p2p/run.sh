@@ -1,22 +1,35 @@
+```sh
 #!/bin/sh
-set +e
 
 echo "========================================"
-echo " REOLINK P2P RAW UDP TRANSPORT TEST"
+echo "REOLINK P2P RAW UDP TRANSPORT TEST"
 echo "========================================"
+
 echo "RESULT: SHELL_START"
 
-if [ ! -f /data/options.json ]; then
-    echo "RESULT: OPTIONS_FEHLEN"
-    exit 1
+if [ -f /data/options.json ]; then
+    echo "RESULT: OPTIONS_VORHANDEN"
+else
+    echo "RESULT: OPTIONS_VORHANDEN=NEIN"
 fi
 
-echo "RESULT: OPTIONS_VORHANDEN"
-echo "RESULT: PYTHON_DATEI_VORHANDEN=$(test -f /data/reolink_raw_udp_test.py && echo JA || echo NEIN)"
+if [ -f /data/reolink_raw_udp_test.py ]; then
+    echo "RESULT: PYTHON_DATEI_VORHANDEN=JA"
+else
+    echo "RESULT: PYTHON_DATEI_VORHANDEN=NEIN"
+    echo "ERROR: /data/reolink_raw_udp_test.py fehlt"
+    echo "RESULT: SHELL_ENDE"
+    exit 2
+fi
+
+echo "RESULT: STARTE_PYTHON"
 
 python3 /data/reolink_raw_udp_test.py
+
 RC=$?
 
 echo "RESULT: PYTHON_EXITCODE=$RC"
 echo "RESULT: SHELL_ENDE"
-exit 0
+
+exit "$RC"
+```
