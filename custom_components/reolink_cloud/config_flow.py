@@ -1,4 +1,3 @@
-```python
 """Config flow for Reolink Cloud / P2P."""
 
 from __future__ import annotations
@@ -46,4 +45,3 @@ class ReolinkCloudConfigFlow(
             step_id="user",
             data_schema=schema,
         )
-```
