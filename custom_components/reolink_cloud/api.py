@@ -1,13 +1,16 @@
-"""Reolink P2P API client."""
+"""Reolink P2P API client using the live stream instead of Snapshot."""
 
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
 import threading
 from datetime import datetime
 from typing import Any
 
 from pyneolink import Camera
+from pyneolink.core.bc import InvalidMagicError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,9 +29,15 @@ class ReolinkCloudApi:
         self._uid = uid
         self._username = username
         self._password = password
-
-        # Only one complete P2P transaction at a time.
         self._lock = threading.Lock()
+
+        self._ffmpeg = shutil.which("ffmpeg")
+
+        if not self._ffmpeg:
+            _LOGGER.error(
+                "FFmpeg was not found in PATH. "
+                "Live-stream snapshots cannot be created."
+            )
 
     @property
     def uid(self) -> str:
@@ -44,7 +53,7 @@ class ReolinkCloudApi:
 
     @staticmethod
     def _is_jpeg(data: bytes) -> bool:
-        """Return True when data has JPEG start/end markers."""
+        """Return True when data contains a JPEG."""
 
         return (
             len(data) >= 4
@@ -71,7 +80,7 @@ class ReolinkCloudApi:
 
             try:
                 _LOGGER.info(
-                    "[%s] Connecting to Reolink camera %s",
+                    "[%s] Connecting to Reolink camera %s using P2P",
                     self._timestamp(),
                     self._uid,
                 )
@@ -79,7 +88,7 @@ class ReolinkCloudApi:
                 camera.connect()
 
                 _LOGGER.info(
-                    "[%s] P2P connection successful: %s",
+                    "[%s] Successfully connected to Reolink camera %s via P2P",
                     self._timestamp(),
                     self._uid,
                 )
@@ -99,14 +108,25 @@ class ReolinkCloudApi:
                         exc_info=True,
                     )
 
-    def _snapshot_once(self) -> bytes:
-        """Take one snapshot using a fresh P2P connection."""
+    def _stream_snapshot_once(self) -> bytes:
+        """
+        Get a JPEG frame from the live P2P stream.
+
+        IMPORTANT:
+        Do NOT use camera.snapshot().
+        The Snapshot command is unreliable with this camera.
+        """
+
+        if not self._ffmpeg:
+            raise RuntimeError(
+                "FFmpeg is required for live-stream snapshots"
+            )
 
         camera = self._create_camera()
 
         try:
             _LOGGER.info(
-                "[%s] Connecting for snapshot: %s",
+                "[%s] Connecting to live stream for %s",
                 self._timestamp(),
                 self._uid,
             )
@@ -114,82 +134,144 @@ class ReolinkCloudApi:
             camera.connect()
 
             _LOGGER.info(
-                "[%s] Requesting snapshot from %s",
+                "[%s] Starting live stream for %s",
                 self._timestamp(),
                 self._uid,
             )
 
-            snapshot = camera.snapshot()
+            # PyNeolink's record() path uses the live MPEG-TS stream.
+            #
+            # We let ffmpeg read the MPEG-TS stream and extract
+            # exactly one JPEG frame.
+            #
+            # The stream itself is handled by PyNeolink.
+            #
+            # This section intentionally avoids camera.snapshot().
 
-            if not isinstance(snapshot, bytes):
-                raise TypeError(
-                    "Reolink snapshot did not return bytes"
-                )
-
-            _LOGGER.info(
-                "[%s] Snapshot received: %d bytes",
-                self._timestamp(),
-                len(snapshot),
+            process = subprocess.Popen(
+                [
+                    self._ffmpeg,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "mpegts",
+                    "-i",
+                    "pipe:0",
+                    "-frames:v",
+                    "1",
+                    "-f",
+                    "image2",
+                    "-vcodec",
+                    "mjpeg",
+                    "pipe:1",
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
 
-            if not self._is_jpeg(snapshot):
-                _LOGGER.error(
-                    "[%s] Invalid JPEG from %s: "
-                    "size=%d header=%s trailer=%s",
+            try:
+                # The actual live-stream reader is provided by
+                # PyNeolink's media layer.
+                #
+                # We intentionally don't call camera.snapshot().
+                #
+                # The stream API differs between PyNeolink releases,
+                # therefore the stream object is detected dynamically.
+
+                stream_method = getattr(camera, "stream", None)
+
+                if stream_method is None:
+                    raise RuntimeError(
+                        "Installed PyNeolink version does not expose "
+                        "the live stream API."
+                    )
+
+                stream = stream_method(
+                    stream="mainStream",
+                    quality="high",
+                )
+
+                for chunk in stream:
+                    if not chunk:
+                        continue
+
+                    process.stdin.write(chunk)
+                    process.stdin.flush()
+
+                    if process.poll() is not None:
+                        break
+
+                try:
+                    process.stdin.close()
+                except Exception:
+                    pass
+
+                jpeg, stderr = process.communicate(timeout=15)
+
+                if process.returncode != 0:
+                    error = stderr.decode(
+                        "utf-8",
+                        errors="replace",
+                    ).strip()
+
+                    raise RuntimeError(
+                        f"FFmpeg failed with code "
+                        f"{process.returncode}: {error}"
+                    )
+
+                if not self._is_jpeg(jpeg):
+                    raise ValueError(
+                        "Live stream did not produce a valid JPEG"
+                    )
+
+                _LOGGER.info(
+                    "[%s] JPEG frame received from live stream: %d bytes",
                     self._timestamp(),
-                    self._uid,
-                    len(snapshot),
-                    snapshot[:16].hex(),
-                    snapshot[-16:].hex(),
+                    len(jpeg),
                 )
 
-                raise ValueError(
-                    "Reolink snapshot is not a valid JPEG"
-                )
+                return jpeg
 
-            _LOGGER.info(
-                "[%s] Valid JPEG received: %d bytes",
-                self._timestamp(),
-                len(snapshot),
-            )
-
-            return snapshot
+            finally:
+                if process.poll() is None:
+                    process.kill()
 
         finally:
             try:
                 camera.close()
             except Exception:
                 _LOGGER.debug(
-                    "[%s] Error closing snapshot connection",
+                    "[%s] Error closing live-stream connection",
                     self._timestamp(),
                     exc_info=True,
                 )
 
     def snapshot(self) -> bytes:
-        """Get a snapshot with one retry after any P2P error."""
+        """
+        Return a JPEG frame.
+
+        This method deliberately does NOT use Reolink's Snapshot command.
+        """
 
         with self._lock:
             try:
-                return self._snapshot_once()
+                return self._stream_snapshot_once()
 
-            except Exception as err:
+            except InvalidMagicError as err:
                 _LOGGER.warning(
-                    "[%s] Snapshot failed for %s: %s: %s",
+                    "[%s] Invalid Baichuan packet while reading "
+                    "live stream from %s: %s",
                     self._timestamp(),
                     self._uid,
-                    type(err).__name__,
                     err,
                 )
 
-                _LOGGER.info(
-                    "[%s] Retrying snapshot with fresh P2P connection",
-                    self._timestamp(),
-                )
-
-                return self._snapshot_once()
+                raise
 
     def close(self) -> None:
-        """Close persistent connection.
+        """Close API resources."""
 
-        Connections are deliberately short-lived.
-        """
+        # Connections are deliberately short-lived.
+        return
