@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import Any
 
 from pyneolink import Camera
-from pyneolink.core.bc import InvalidMagicError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,11 +26,14 @@ class ReolinkCloudApi:
         self._uid = uid
         self._username = username
         self._password = password
+
+        # Only one complete P2P transaction at a time.
         self._lock = threading.Lock()
 
     @property
     def uid(self) -> str:
         """Return the camera UID."""
+
         return self._uid
 
     @staticmethod
@@ -98,7 +100,7 @@ class ReolinkCloudApi:
                     )
 
     def _snapshot_once(self) -> bytes:
-        """Take one snapshot using a fresh connection."""
+        """Take one snapshot using a fresh P2P connection."""
 
         camera = self._create_camera()
 
@@ -124,7 +126,23 @@ class ReolinkCloudApi:
                     "Reolink snapshot did not return bytes"
                 )
 
+            _LOGGER.info(
+                "[%s] Snapshot received: %d bytes",
+                self._timestamp(),
+                len(snapshot),
+            )
+
             if not self._is_jpeg(snapshot):
+                _LOGGER.error(
+                    "[%s] Invalid JPEG from %s: "
+                    "size=%d header=%s trailer=%s",
+                    self._timestamp(),
+                    self._uid,
+                    len(snapshot),
+                    snapshot[:16].hex(),
+                    snapshot[-16:].hex(),
+                )
+
                 raise ValueError(
                     "Reolink snapshot is not a valid JPEG"
                 )
@@ -148,22 +166,23 @@ class ReolinkCloudApi:
                 )
 
     def snapshot(self) -> bytes:
-        """Get a snapshot with one retry after a P2P protocol error."""
+        """Get a snapshot with one retry after any P2P error."""
 
         with self._lock:
             try:
                 return self._snapshot_once()
 
-            except InvalidMagicError as err:
+            except Exception as err:
                 _LOGGER.warning(
-                    "[%s] Invalid Baichuan magic from %s: %s",
+                    "[%s] Snapshot failed for %s: %s: %s",
                     self._timestamp(),
                     self._uid,
+                    type(err).__name__,
                     err,
                 )
 
                 _LOGGER.info(
-                    "[%s] Reconnecting and retrying snapshot",
+                    "[%s] Retrying snapshot with fresh P2P connection",
                     self._timestamp(),
                 )
 
