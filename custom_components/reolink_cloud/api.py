@@ -26,18 +26,18 @@ class ReolinkCloudApi:
         self._password = password
         self._camera: Camera | None = None
 
-    async def connect(self) -> dict[str, Any]:
+    def connect(self) -> dict[str, Any]:
         """Connect to the camera using Reolink P2P."""
 
-        _LOGGER.debug(
+        _LOGGER.info(
             "Connecting to Reolink camera %s using P2P",
             self._uid,
         )
 
         camera = Camera(
-            self._uid,
-            self._username,
-            self._password,
+            uuid=self._uid,
+            username=self._username,
+            password=self._password,
             timeout=120,
             debug=True,
         )
