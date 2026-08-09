@@ -11,6 +11,8 @@ startup: application
 boot: manual
 init: false
 
+host_network: true
+
 options:
   uid: "9527000KLBT71M83"
   username: "admin"
