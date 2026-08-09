@@ -1,329 +1,364 @@
 import json
 import sys
-import time
 import traceback
+import inspect
+import socket
 
+print("RESULT: PYTHON_START", flush=True)
 
-def result(message):
-    print(f"RESULT: {message}", flush=True)
+# ============================================================
 
+# IMPORT
 
-result("PYTHON_START")
-
-camera = None
-
-# ------------------------------------------------------------
-# PyNeolink import
-# ------------------------------------------------------------
+# ============================================================
 
 try:
-    import pyneolink
-    from pyneolink.camera import Camera
+import pyneolink
+import pyneolink.core.udp_transport as udp
 
-    result(
-        f"PYNEOLINK_VERSION="
-        f"{getattr(pyneolink, '__version__', 'unbekannt')}"
-    )
-    result("CAMERA_IMPORT_OK")
+```
+print(
+    f"RESULT: PYNEOLINK_VERSION="
+    f"{getattr(pyneolink, '__version__', 'unbekannt')}",
+    flush=True,
+)
+
+print("RESULT: CAMERA_IMPORT_OK", flush=True)
+```
 
 except Exception as exc:
-    result(f"IMPORT_FEHLER={type(exc).__name__}: {exc}")
-    traceback.print_exc()
-    sys.exit(1)
+print(
+f"RESULT: IMPORT_FEHLER={type(exc).**name**}: {exc}",
+flush=True,
+)
+traceback.print_exc()
+sys.exit(1)
 
+# ============================================================
 
-# ------------------------------------------------------------
-# Optionen lesen
-# ------------------------------------------------------------
+# OPTIONEN
+
+# ============================================================
 
 try:
-    with open("/data/options.json", "r", encoding="utf-8") as file:
-        options = json.load(file)
+with open("/data/options.json", "r", encoding="utf-8") as f:
+options = json.load(f)
 
-    uid = str(options.get("uid", "")).strip()
-    username = str(options.get("username", "admin")).strip()
-    password = str(options.get("password", ""))
+```
+uid = options.get("uid", "")
+username = options.get("username", "admin")
+password = options.get("password", "")
 
-    result(f"UID={uid}")
-    result(f"USERNAME={username}")
-    result(
-        f"PASSWORD_GESETZT="
-        f"{'JA' if password else 'NEIN'}"
-    )
-    result(f"PASSWORD_LAENGE={len(password)}")
-
-    if not uid:
-        result("FEHLER_UID_FEHLT")
-        sys.exit(1)
-
-    if not password:
-        result("FEHLER_PASSWORT_FEHLT")
-        sys.exit(1)
+print(f"RESULT: UID={uid}", flush=True)
+print(f"RESULT: USERNAME={username}", flush=True)
+print(
+    f"RESULT: PASSWORD_GESETZT={'JA' if password else 'NEIN'}",
+    flush=True,
+)
+print(f"RESULT: PASSWORD_LAENGE={len(password)}", flush=True)
+```
 
 except Exception as exc:
-    result(f"OPTIONS_FEHLER={type(exc).__name__}: {exc}")
-    traceback.print_exc()
-    sys.exit(1)
+print(
+f"RESULT: OPTIONS_FEHLER={type(exc).**name**}: {exc}",
+flush=True,
+)
+traceback.print_exc()
+sys.exit(1)
 
+# ============================================================
 
-# ------------------------------------------------------------
-# Kamera erzeugen
-# ------------------------------------------------------------
+# UDP_TRANSPORT UNTERSUCHEN
+
+# ============================================================
+
+print("RESULT: UDP_TRANSPORT_ANALYSE_START", flush=True)
 
 try:
-    result("CAMERA_ERZEUGT")
+names = sorted(
+name
+for name in dir(udp)
+if not name.startswith("__")
+)
 
-    camera = Camera(
-        uid=uid,
-        username=username,
-        password=password,
-        debug=True,
-    )
+```
+print(
+    f"RESULT: UDP_TRANSPORT_OBJECTS={len(names)}",
+    flush=True,
+)
 
-    result("CAMERA_OBJEKT_OK")
-
-except Exception as exc:
-    result(f"CAMERA_ERZEUGEN_FEHLER={type(exc).__name__}: {exc}")
-    traceback.print_exc()
-    sys.exit(1)
-
-
-# ------------------------------------------------------------
-# CONNECT
-# ------------------------------------------------------------
-
-try:
-    result("CONNECT_START")
-
-    camera.connect()
-
-    result("CONNECT_OK")
-
-except Exception as exc:
-    result(f"CONNECT_FEHLER={type(exc).__name__}: {exc}")
-    traceback.print_exc()
-
-    # Auch bei Connect-Fehler sauber schließen
+for name in names:
     try:
-        camera.close()
-        result("CLOSE_OK")
-    except Exception as close_exc:
-        result(
-            f"CLOSE_FEHLER="
-            f"{type(close_exc).__name__}: {close_exc}"
-        )
+        obj = getattr(udp, name)
 
-    result("TEST_ENDE")
-    result("PYTHON_ENDE")
-    sys.exit(2)
-
-
-# ------------------------------------------------------------
-# LOGIN
-# ------------------------------------------------------------
-
-try:
-    result("LOGIN_START")
-
-    login_result = camera.login()
-
-    result("LOGIN_OK")
-    result(f"LOGIN_RESULT_TYPE={type(login_result)}")
-
-    if login_result is not None:
-        login_text = str(login_result)
-
-        result(f"LOGIN_RESULT_LEN={len(login_text)}")
-
-        # Begrenzen, damit der Log nicht unnötig riesig wird.
-        print(login_text[:4000], flush=True)
-
-except Exception as exc:
-    result(f"LOGIN_FEHLER={type(exc).__name__}: {exc}")
-    traceback.print_exc()
-
-    try:
-        camera.close()
-        result("CLOSE_OK")
-    except Exception as close_exc:
-        result(
-            f"CLOSE_FEHLER="
-            f"{type(close_exc).__name__}: {close_exc}"
-        )
-
-    result("TEST_ENDE")
-    result("PYTHON_ENDE")
-    sys.exit(3)
-
-
-# ------------------------------------------------------------
-# STREAM STARTEN
-# ------------------------------------------------------------
-
-try:
-    result("START_STREAM")
-
-    camera.start_stream("mainStream")
-
-    result("START_STREAM_OK")
-
-except Exception as exc:
-    result(
-        f"START_STREAM_FEHLER="
-        f"{type(exc).__name__}: {exc}"
-    )
-    traceback.print_exc()
-
-    try:
-        camera.close()
-        result("CLOSE_OK")
-    except Exception as close_exc:
-        result(
-            f"CLOSE_FEHLER="
-            f"{type(close_exc).__name__}: {close_exc}"
-        )
-
-    result("TEST_ENDE")
-    result("PYTHON_ENDE")
-    sys.exit(4)
-
-
-# ------------------------------------------------------------
-# Socket untersuchen
-# ------------------------------------------------------------
-
-result("STREAM_LAEUFT")
-
-try:
-    sock = getattr(camera, "sock", None)
-
-    result(f"SOCKET_TYPE={type(sock)}")
-
-    if sock is not None:
-
-        attributes = [
-            "addr",
-            "camera_id",
-            "client_id",
-            "data_packets_received",
-            "data_bytes_received",
-            "acks_received",
-            "acks_sent",
-            "duplicate_packets_received",
-            "ignored_packets",
-            "unknown_packets",
-        ]
-
-        for attribute in attributes:
-            try:
-                value = getattr(sock, attribute)
-                result(
-                    f"SOCKET_{attribute.upper()}={value}"
-                )
-            except Exception:
-                pass
-
-except Exception as exc:
-    result(
-        f"SOCKET_ANALYSE_FEHLER="
-        f"{type(exc).__name__}: {exc}"
-    )
-
-
-# ------------------------------------------------------------
-# Stream laufen lassen
-# ------------------------------------------------------------
-
-result("STREAM_TEST_START")
-
-for second in range(1, 16):
-
-    time.sleep(1)
-
-    try:
-        sock = getattr(camera, "sock", None)
-
-        if sock is None:
-            result(
-                f"STREAM_STATUS={second}s "
-                f"SOCKET=NONE"
+        if inspect.isfunction(obj):
+            print(
+                f"RESULT: FUNCTION={name}"
+                f" SIGNATURE={inspect.signature(obj)}",
+                flush=True,
             )
-            continue
 
-        packets = getattr(
-            sock,
-            "data_packets_received",
-            None,
-        )
-
-        bytes_received = getattr(
-            sock,
-            "data_bytes_received",
-            None,
-        )
-
-        acks_received = getattr(
-            sock,
-            "acks_received",
-            None,
-        )
-
-        acks_sent = getattr(
-            sock,
-            "acks_sent",
-            None,
-        )
-
-        result(
-            f"STREAM_STATUS={second}s "
-            f"PACKETS={packets} "
-            f"BYTES={bytes_received} "
-            f"ACKS_RX={acks_received} "
-            f"ACKS_TX={acks_sent}"
-        )
+        elif inspect.isclass(obj):
+            print(
+                f"RESULT: CLASS={name}",
+                flush=True,
+            )
 
     except Exception as exc:
-        result(
-            f"STREAM_STATUS_FEHLER="
-            f"{type(exc).__name__}: {exc}"
+        print(
+            f"RESULT: INSPECT_FEHLER={name}: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+```
+
+except Exception as exc:
+print(
+f"RESULT: UDP_ANALYSE_FEHLER={type(exc).**name**}: {exc}",
+flush=True,
+)
+traceback.print_exc()
+
+print("RESULT: UDP_TRANSPORT_ANALYSE_ENDE", flush=True)
+
+# ============================================================
+
+# WICHTIGE FUNKTIONEN DIREKT PRÜFEN
+
+# ============================================================
+
+for function_name in [
+"connect_relay",
+"connect_local",
+"p2p_lookup",
+"register_client",
+"send_c2r",
+]:
+try:
+obj = getattr(udp, function_name, None)
+
+```
+    if obj is None:
+        print(
+            f"RESULT: FUNCTION_CHECK={function_name}: NICHT_VORHANDEN",
+            flush=True,
+        )
+    else:
+        print(
+            f"RESULT: FUNCTION_CHECK={function_name}: VORHANDEN",
+            flush=True,
         )
 
-
-result("STREAM_TEST_ENDE")
-
-
-# ------------------------------------------------------------
-# Stream stoppen
-# ------------------------------------------------------------
-
-result("STOP_STREAM")
-
-try:
-    camera.stop_stream("mainStream")
-    result("STOP_STREAM_OK")
+        try:
+            print(
+                f"RESULT: FUNCTION_SIGNATURE={function_name}: "
+                f"{inspect.signature(obj)}",
+                flush=True,
+            )
+        except Exception:
+            pass
 
 except Exception as exc:
-    result(
-        f"STOP_STREAM_FEHLER="
-        f"{type(exc).__name__}: {exc}"
+    print(
+        f"RESULT: FUNCTION_CHECK_FEHLER={function_name}: "
+        f"{type(exc).__name__}: {exc}",
+        flush=True,
     )
-    traceback.print_exc()
+```
 
+# ============================================================
 
-# ------------------------------------------------------------
-# Verbindung schließen
-# ------------------------------------------------------------
+# CAMERA-KLASSE ANALYSIEREN
+
+# ============================================================
 
 try:
-    camera.close()
-    result("CLOSE_OK")
+from pyneolink.camera import Camera
+
+```
+print("RESULT: CAMERA_CLASS_OK", flush=True)
+
+print(
+    f"RESULT: CAMERA_CONNECT_SIGNATURE="
+    f"{inspect.signature(Camera.connect)}",
+    flush=True,
+)
+
+print(
+    f"RESULT: CAMERA_LOGIN_SIGNATURE="
+    f"{inspect.signature(Camera.login)}",
+    flush=True,
+)
+
+print(
+    f"RESULT: CAMERA_STREAM_SIGNATURE="
+    f"{inspect.signature(Camera.start_stream)}",
+    flush=True,
+)
+```
 
 except Exception as exc:
-    result(
-        f"CLOSE_FEHLER="
-        f"{type(exc).__name__}: {exc}"
+print(
+f"RESULT: CAMERA_ANALYSE_FEHLER="
+f"{type(exc).**name**}: {exc}",
+flush=True,
+)
+traceback.print_exc()
+
+# ============================================================
+
+# SOCKET / NETZWERK INFORMATIONEN
+
+# ============================================================
+
+print("RESULT: NETWORK_ANALYSE_START", flush=True)
+
+try:
+hostname = socket.gethostname()
+print(f"RESULT: HOSTNAME={hostname}", flush=True)
+
+```
+try:
+    addresses = socket.getaddrinfo(
+        hostname,
+        None,
+        socket.AF_INET,
     )
 
+    unique_addresses = sorted(
+        {
+            entry[4][0]
+            for entry in addresses
+            if entry[4]
+        }
+    )
 
-result("TEST_ENDE")
-result("PYTHON_ENDE")
+    for address in unique_addresses:
+        print(
+            f"RESULT: LOCAL_IPV4={address}",
+            flush=True,
+        )
+
+except Exception as exc:
+    print(
+        f"RESULT: LOCAL_IP_FEHLER="
+        f"{type(exc).__name__}: {exc}",
+        flush=True,
+    )
+```
+
+except Exception as exc:
+print(
+f"RESULT: NETWORK_FEHLER={type(exc).**name**}: {exc}",
+flush=True,
+)
+
+# ============================================================
+
+# SOCKET TEST
+
+# ============================================================
+
+try:
+sock = socket.socket(
+socket.AF_INET,
+socket.SOCK_DGRAM,
+)
+
+```
+sock.settimeout(2.0)
+
+sock.bind(("0.0.0.0", 0))
+
+local_ip, local_port = sock.getsockname()
+
+print(
+    f"RESULT: UDP_SOCKET_OK={local_ip}:{local_port}",
+    flush=True,
+)
+
+sock.close()
+```
+
+except Exception as exc:
+print(
+f"RESULT: UDP_SOCKET_FEHLER="
+f"{type(exc).**name**}: {exc}",
+flush=True,
+)
+
+print("RESULT: NETWORK_ANALYSE_ENDE", flush=True)
+
+# ============================================================
+
+# CAMERA OBJEKT ERZEUGEN
+
+# ============================================================
+
+try:
+camera = Camera(
+uid=uid,
+username=username,
+password=password,
+)
+
+```
+print("RESULT: CAMERA_ERZEUGT", flush=True)
+
+# Nur Objektattribute untersuchen.
+# Noch KEIN camera.connect()!
+
+attrs = sorted(
+    name
+    for name in dir(camera)
+    if not name.startswith("__")
+)
+
+print(
+    f"RESULT: CAMERA_ATTRIBUTES={len(attrs)}",
+    flush=True,
+)
+
+for name in attrs:
+    try:
+        obj = getattr(camera, name)
+
+        if callable(obj):
+            try:
+                signature = inspect.signature(obj)
+                print(
+                    f"RESULT: CAMERA_METHOD={name}"
+                    f" SIGNATURE={signature}",
+                    flush=True,
+                )
+            except Exception:
+                print(
+                    f"RESULT: CAMERA_METHOD={name}",
+                    flush=True,
+                )
+
+    except Exception:
+        pass
+```
+
+except Exception as exc:
+print(
+f"RESULT: CAMERA_ERZEUGEN_FEHLER="
+f"{type(exc).**name**}: {exc}",
+flush=True,
+)
+traceback.print_exc()
+
+# ============================================================
+
+# ABSICHTLICH KEIN CONNECT
+
+# ============================================================
+
+print("RESULT: CONNECT_TEST=NICHT_AUSGEFUEHRT", flush=True)
+print("RESULT: GRUND=ZUERST_PYNEOLINK_P2P_API_ANALYSIEREN", flush=True)
+
+print("RESULT: TEST_ENDE", flush=True)
+print("RESULT: PYTHON_ENDE", flush=True)
+
+sys.exit(0)
