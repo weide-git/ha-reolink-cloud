@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 from pyneolink import Camera
@@ -25,6 +26,9 @@ class ReolinkCloudApi:
         self._username = username
         self._password = password
         self._camera: Camera | None = None
+
+        # Only allow one camera operation at a time.
+        self._snapshot_lock = threading.Lock()
 
     @property
     def uid(self) -> str:
@@ -68,25 +72,72 @@ class ReolinkCloudApi:
         if self._camera is None:
             raise RuntimeError("Camera is not connected")
 
-        _LOGGER.info(
-            "Requesting snapshot from Reolink camera %s",
-            self._uid,
-        )
-
-        snapshot = self._camera.snapshot()
-
-        if not isinstance(snapshot, bytes):
-            raise TypeError(
-                "Reolink snapshot did not return bytes"
+        # Prevent Home Assistant from starting several snapshot
+        # requests against the same P2P connection at once.
+        if not self._snapshot_lock.acquire(blocking=False):
+            _LOGGER.warning(
+                "Snapshot request ignored because another snapshot "
+                "is already in progress for Reolink camera %s",
+                self._uid,
+            )
+            raise RuntimeError(
+                "Another snapshot request is already in progress"
             )
 
-        _LOGGER.info(
-            "Received snapshot from Reolink camera %s (%d bytes)",
-            self._uid,
-            len(snapshot),
-        )
+        try:
+            _LOGGER.info(
+                "Requesting snapshot from Reolink camera %s",
+                self._uid,
+            )
 
-        return snapshot
+            snapshot = self._camera.snapshot()
+
+            _LOGGER.info(
+                "Camera.snapshot() returned for Reolink camera %s",
+                self._uid,
+            )
+
+            _LOGGER.info(
+                "Snapshot return type: %s",
+                type(snapshot).__name__,
+            )
+
+            if isinstance(snapshot, bytes):
+                _LOGGER.info(
+                    "Received snapshot from Reolink camera %s "
+                    "(%d bytes)",
+                    self._uid,
+                    len(snapshot),
+                )
+
+                if snapshot.startswith(b"\xff\xd8\xff"):
+                    _LOGGER.info(
+                        "Snapshot starts with valid JPEG signature"
+                    )
+                else:
+                    _LOGGER.warning(
+                        "Snapshot does not start with a JPEG signature. "
+                        "First 16 bytes: %s",
+                        snapshot[:16].hex(" "),
+                    )
+
+                return snapshot
+
+            raise TypeError(
+                "Reolink snapshot did not return bytes; "
+                f"got {type(snapshot).__name__}"
+            )
+
+        except Exception:
+            _LOGGER.exception(
+                "Error while requesting snapshot from "
+                "Reolink camera %s",
+                self._uid,
+            )
+            raise
+
+        finally:
+            self._snapshot_lock.release()
 
     def close(self) -> None:
         """Close the P2P connection."""
