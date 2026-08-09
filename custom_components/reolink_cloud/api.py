@@ -1,44 +1,70 @@
-"""Reolink Cloud API client."""
+"""Reolink P2P API client."""
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import aiohttp
+from pyneolink import Camera
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ReolinkCloudApi:
-    """Client for the Reolink Cloud service."""
+    """Client for a Reolink camera using P2P."""
 
     def __init__(
         self,
-        session: aiohttp.ClientSession,
-        token: str,
+        uid: str,
+        username: str,
+        password: str,
     ) -> None:
-        """Initialize the API client."""
-        self._session = session
-        self._token = token.strip()
+        """Initialize the P2P client."""
 
-    async def test_connection(self) -> dict[str, Any]:
-        """Test authenticated access to Reolink Cloud."""
+        self._uid = uid
+        self._username = username
+        self._password = password
+        self._camera: Camera | None = None
 
-        url = "https://apis.reolink.com/v2/cloud/videos/records/"
+    async def connect(self) -> dict[str, Any]:
+        """Connect to the camera using Reolink P2P."""
 
-        headers = {
-            "Authorization": f"Bearer {self._token}",
-            "Accept": "application/json",
-            "User-Agent": "HomeAssistant-ReolinkCloud/0.2.0",
+        _LOGGER.debug(
+            "Connecting to Reolink camera %s using P2P",
+            self._uid,
+        )
+
+        camera = Camera(
+            self._uid,
+            self._username,
+            self._password,
+            timeout=120,
+            debug=True,
+        )
+
+        camera.connect()
+
+        self._camera = camera
+
+        _LOGGER.info(
+            "Successfully connected to Reolink camera %s via P2P",
+            self._uid,
+        )
+
+        return {
+            "connected": True,
+            "uid": self._uid,
         }
 
-        async with self._session.get(
-            url,
-            headers=headers,
-            timeout=aiohttp.ClientTimeout(total=20),
-        ) as response:
-            text = await response.text()
+    def close(self) -> None:
+        """Close the P2P connection."""
 
-            return {
-                "status": response.status,
-                "content_type": response.headers.get("content-type"),
-                "body": text[:10000],
-            }
+        if self._camera is not None:
+            try:
+                self._camera.close()
+            except Exception:
+                _LOGGER.exception(
+                    "Error while closing Reolink P2P connection"
+                )
+            finally:
+                self._camera = None
