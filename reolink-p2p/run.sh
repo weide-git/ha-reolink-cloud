@@ -25,7 +25,6 @@ fi
 echo "RESULT: STARTE_PYTHON"
 
 python3 /data/reolink_raw_udp_test.py
-
 RC=$?
 
 echo "RESULT: PYTHON_EXITCODE=$RC"
