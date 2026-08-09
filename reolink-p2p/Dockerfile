@@ -10,11 +10,9 @@ WORKDIR /data
 COPY reolink_raw_udp_test.py /data/reolink_raw_udp_test.py
 COPY run.sh /run.sh
 
-RUN echo "=== BUILD CHECK ===" && 
-ls -la /data && 
-ls -la /run.sh && 
-test -f /data/reolink_raw_udp_test.py && 
-echo "=== PYTHON DATEI IM IMAGE VORHANDEN ===" && 
-chmod 755 /run.sh
+RUN ls -la /data
+RUN ls -la /run.sh
+RUN test -f /data/reolink_raw_udp_test.py
+RUN chmod 755 /run.sh
 
 ENTRYPOINT ["/run.sh"]
