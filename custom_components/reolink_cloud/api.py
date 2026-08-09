@@ -4,6 +4,7 @@ from **future** import annotations
 
 import logging
 import threading
+from datetime import datetime
 from typing import Any
 
 from pyneolink import Camera
@@ -27,8 +28,9 @@ def __init__(
     self._password = password
     self._camera: Camera | None = None
 
-    self._connect_lock = threading.Lock()
-    self._snapshot_lock = threading.Lock()
+    # pyneolink uses a single socket per Camera instance.
+    # Access to that instance must therefore be serialized.
+    self._lock = threading.RLock()
 
 @property
 def uid(self) -> str:
@@ -36,129 +38,219 @@ def uid(self) -> str:
 
     return self._uid
 
-@property
-def connected(self) -> bool:
-    """Return whether the camera is connected."""
+def _log_time(self) -> str:
+    """Return the current local time for diagnostic logging."""
 
-    return self._camera is not None
+    return datetime.now().strftime("%H:%M:%S.%f")[:-3]
+
+def _connect_locked(self) -> None:
+    """Connect to the camera.
+
+    The caller must hold self._lock.
+    """
+
+    _LOGGER.info(
+        "[%s] Connecting to Reolink camera %s using P2P",
+        self._log_time(),
+        self._uid,
+    )
+
+    camera = Camera(
+        uuid=self._uid,
+        username=self._username,
+        password=self._password,
+        timeout=120,
+        debug=True,
+    )
+
+    try:
+        camera.connect()
+    except Exception:
+        _LOGGER.exception(
+            "[%s] Failed to connect to Reolink camera %s via P2P",
+            self._log_time(),
+            self._uid,
+        )
+
+        try:
+            camera.close()
+        except Exception:
+            pass
+
+        raise
+
+    self._camera = camera
+
+    _LOGGER.info(
+        "[%s] Successfully connected to Reolink camera %s via P2P",
+        self._log_time(),
+        self._uid,
+    )
 
 def connect(self) -> dict[str, Any]:
     """Connect to the camera using Reolink P2P."""
 
-    if self._camera is not None:
-        _LOGGER.debug(
-            "Reolink camera %s is already connected",
-            self._uid,
-        )
+    with self._lock:
+        # Close an existing connection before creating a new one.
+        if self._camera is not None:
+            _LOGGER.info(
+                "[%s] Closing existing Reolink connection before reconnect",
+                self._log_time(),
+            )
+
+            try:
+                self._camera.close()
+            except Exception:
+                _LOGGER.exception(
+                    "[%s] Error while closing existing Reolink connection",
+                    self._log_time(),
+                )
+            finally:
+                self._camera = None
+
+        self._connect_locked()
 
         return {
             "connected": True,
             "uid": self._uid,
         }
 
-    if not self._connect_lock.acquire(
-        blocking=False
-    ):
-        raise RuntimeError(
-            "Another connection attempt is already in progress"
-        )
+def _close_locked(self) -> None:
+    """Close the current camera connection.
 
-    try:
-        _LOGGER.info(
-            "Connecting to Reolink camera %s using P2P",
-            self._uid,
-        )
-
-        camera = Camera(
-            uuid=self._uid,
-            username=self._username,
-            password=self._password,
-            timeout=120,
-            debug=True,
-        )
-
-        camera.connect()
-
-        self._camera = camera
-
-        _LOGGER.info(
-            "Successfully connected to Reolink camera %s via P2P",
-            self._uid,
-        )
-
-        return {
-            "connected": True,
-            "uid": self._uid,
-        }
-
-    finally:
-        self._connect_lock.release()
-
-def snapshot(self) -> bytes:
-    """Get a snapshot from the camera."""
+    The caller must hold self._lock.
+    """
 
     if self._camera is None:
-        raise RuntimeError(
-            "Camera is not connected"
-        )
+        return
 
-    if not self._snapshot_lock.acquire(
-        blocking=False
-    ):
-        raise RuntimeError(
-            "Another snapshot request is already in progress"
-        )
+    camera = self._camera
+    self._camera = None
 
     try:
-        _LOGGER.info(
-            "Requesting snapshot from Reolink camera %s",
-            self._uid,
+        camera.close()
+    except Exception:
+        _LOGGER.exception(
+            "[%s] Error while closing Reolink P2P connection",
+            self._log_time(),
         )
 
-        snapshot = self._camera.snapshot()
+def _is_jpeg(self, data: bytes) -> bool:
+    """Check whether the returned data looks like a JPEG."""
 
+    if len(data) < 4:
+        return False
+
+    return data[:2] == b"\xff\xd8" and data[-2:] == b"\xff\xd9"
+
+def _snapshot_locked(self) -> bytes:
+    """Request a snapshot.
+
+    The caller must hold self._lock.
+    """
+
+    if self._camera is None:
         _LOGGER.info(
-            "Camera.snapshot() returned for Reolink camera %s",
-            self._uid,
+            "[%s] No active Reolink connection, connecting before snapshot",
+            self._log_time(),
         )
 
-        if not isinstance(snapshot, bytes):
-            raise TypeError(
-                "Reolink snapshot did not return bytes; "
-                f"got {type(snapshot).__name__}"
-            )
+        self._connect_locked()
 
-        _LOGGER.info(
-            "Received snapshot from Reolink camera %s (%d bytes)",
-            self._uid,
+    if self._camera is None:
+        raise RuntimeError("Camera is not connected")
+
+    _LOGGER.info(
+        "[%s] Requesting snapshot from Reolink camera %s",
+        self._log_time(),
+        self._uid,
+    )
+
+    snapshot = self._camera.snapshot()
+
+    if not isinstance(snapshot, bytes):
+        raise TypeError(
+            "Reolink snapshot did not return bytes"
+        )
+
+    _LOGGER.info(
+        "[%s] Received snapshot from Reolink camera %s: %d bytes",
+        self._log_time(),
+        self._uid,
+        len(snapshot),
+    )
+
+    if len(snapshot) >= 2:
+        _LOGGER.debug(
+            "[%s] Snapshot header=%s trailer=%s",
+            self._log_time(),
+            snapshot[:2].hex(),
+            snapshot[-2:].hex(),
+        )
+
+    if not self._is_jpeg(snapshot):
+        _LOGGER.error(
+            "[%s] Reolink snapshot is not a valid JPEG: "
+            "size=%d header=%s trailer=%s",
+            self._log_time(),
             len(snapshot),
+            snapshot[:16].hex(),
+            snapshot[-16:].hex() if snapshot else "",
         )
 
-        if snapshot.startswith(b"\xff\xd8\xff"):
-            _LOGGER.info(
-                "Snapshot has a valid JPEG signature"
-            )
-        else:
+        raise ValueError(
+            "Reolink snapshot is not a valid JPEG"
+        )
+
+    _LOGGER.info(
+        "[%s] Valid JPEG received from Reolink camera %s (%d bytes)",
+        self._log_time(),
+        self._uid,
+        len(snapshot),
+    )
+
+    return snapshot
+
+def snapshot(self) -> bytes:
+    """Get a snapshot from the camera.
+
+    If the existing pyneolink connection has become invalid,
+    reconnect once and retry the snapshot.
+    """
+
+    with self._lock:
+        try:
+            return self._snapshot_locked()
+
+        except (OSError, RuntimeError) as err:
             _LOGGER.warning(
-                "Snapshot does not start with a JPEG signature. "
-                "First 16 bytes: %s",
-                snapshot[:16].hex(" "),
+                "[%s] Reolink snapshot failed: %s: %s",
+                self._log_time(),
+                type(err).__name__,
+                err,
             )
 
-        return snapshot
+            _LOGGER.info(
+                "[%s] Reconnecting Reolink camera %s after snapshot failure",
+                self._log_time(),
+                self._uid,
+            )
 
-    finally:
-        self._snapshot_lock.release()
+            self._close_locked()
+
+            # Reconnect and retry exactly once.
+            self._connect_locked()
+
+            _LOGGER.info(
+                "[%s] Retrying snapshot from Reolink camera %s",
+                self._log_time(),
+                self._uid,
+            )
+
+            return self._snapshot_locked()
 
 def close(self) -> None:
     """Close the P2P connection."""
 
-    if self._camera is not None:
-        try:
-            self._camera.close()
-        except Exception:
-            _LOGGER.exception(
-                "Error while closing Reolink P2P connection"
-            )
-        finally:
-            self._camera = None
+    with self._lock:
+        self._close_locked()
