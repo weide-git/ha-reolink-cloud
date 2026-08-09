@@ -1,7 +1,7 @@
 {
   "domain": "reolink_cloud",
   "name": "Reolink Cloud",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "documentation": "https://github.com/weide-git/ha-reolink-cloud",
   "issue_tracker": "https://github.com/weide-git/ha-reolink-cloud/issues",
   "codeowners": [],
