@@ -1,19 +1,27 @@
-"""Reolink Cloud integration for Home Assistant."""
+"""Reolink P2P integration for Home Assistant."""
 
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN
+from .const import (
+    CONF_PASSWORD,
+    CONF_UID,
+    CONF_USERNAME,
+    DOMAIN,
+)
 from .coordinator import ReolinkCloudCoordinator
 
 PLATFORMS: list[str] = []
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the Reolink Cloud integration."""
+async def async_setup(
+    hass: HomeAssistant,
+    config: dict,
+) -> bool:
+    """Set up the Reolink integration."""
+
     return True
 
 
@@ -21,15 +29,14 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
 ) -> bool:
-    """Set up Reolink Cloud from a config entry."""
-
-    session = async_get_clientsession(hass)
+    """Set up Reolink P2P from a config entry."""
 
     coordinator = ReolinkCloudCoordinator(
-    hass,
-    session,
-    entry.data["token"],
-)
+        hass=hass,
+        uid=entry.data[CONF_UID],
+        username=entry.data[CONF_USERNAME],
+        password=entry.data[CONF_PASSWORD],
+    )
 
     await coordinator.async_config_entry_first_refresh()
 
@@ -43,8 +50,16 @@ async def async_unload_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
 ) -> bool:
-    """Unload a Reolink Cloud config entry."""
+    """Unload a Reolink P2P config entry."""
 
-    hass.data[DOMAIN].pop(entry.entry_id, None)
+    coordinator = hass.data[DOMAIN].pop(
+        entry.entry_id,
+        None,
+    )
+
+    if coordinator is not None:
+        await hass.async_add_executor_job(
+            coordinator.api.close
+        )
 
     return True
