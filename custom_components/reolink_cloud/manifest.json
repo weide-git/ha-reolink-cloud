@@ -1,11 +1,13 @@
 {
   "domain": "reolink_cloud",
   "name": "Reolink Cloud",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "documentation": "https://github.com/weide-git/ha-reolink-cloud",
   "issue_tracker": "https://github.com/weide-git/ha-reolink-cloud/issues",
   "codeowners": [],
   "config_flow": true,
   "iot_class": "cloud_polling",
-  "requirements": []
+  "requirements": [
+    "pyneolink==0.4.0"
+  ]
 }
