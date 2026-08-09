@@ -1,111 +1,160 @@
 import json
 import sys
+import time
 import traceback
 
-print("RESULT: PYTHON_START", flush=True)
+
+def result(message):
+    print(f"RESULT: {message}", flush=True)
+
+
+result("PYTHON_START")
+
+camera = None
 
 try:
     import pyneolink
     from pyneolink.camera import Camera
-    print(f"RESULT: PYNEOLINK_VERSION={getattr(pyneolink, '__version__', 'unbekannt')}", flush=True)
-    print("RESULT: CAMERA_IMPORT_OK", flush=True)
+
+    result(f"PYNEOLINK_VERSION={getattr(pyneolink, '__version__', 'unbekannt')}")
+    result("CAMERA_IMPORT_OK")
+
 except Exception as exc:
-    print(f"RESULT: IMPORT_FEHLER={type(exc).__name__}: {exc}", flush=True)
+    result(f"IMPORT_FEHLER={type(exc).__name__}: {exc}")
+    traceback.print_exc()
     sys.exit(1)
 
-try:
-    with open("/data/options.json", "r", encoding="utf-8") as f:
-        options = json.load(f)
 
-    uid = options.get("uid", "")
-    username = options.get("username", "admin")
+try:
+    with open("/data/options.json", "r", encoding="utf-8") as file:
+        options = json.load(file)
+
+    uid = options.get("uid", "").strip()
+    username = options.get("username", "admin").strip()
     password = options.get("password", "")
 
-    print(f"RESULT: UID={uid}", flush=True)
-    print(f"RESULT: USERNAME={username}", flush=True)
-    print(f"RESULT: PASSWORD_GESETZT={'JA' if password else 'NEIN'}", flush=True)
-    print(f"RESULT: PASSWORD_LAENGE={len(password)}", flush=True)
+    result(f"UID={uid}")
+    result(f"USERNAME={username}")
+    result(f"PASSWORD_GESETZT={'JA' if password else 'NEIN'}")
+    result(f"PASSWORD_LAENGE={len(password)}")
 
-    camera = Camera(uid=uid, username=username, password=password)
-    print("RESULT: CAMERA_ERZEUGT", flush=True)
+    if not uid:
+        result("FEHLER_UID_FEHLT")
+        sys.exit(1)
 
-    print("RESULT: CONNECT_START", flush=True)
-    camera.connect()
-    print("RESULT: CONNECT_OK", flush=True)
+    if not password:
+        result("FEHLER_PASSWORT_FEHLT")
+        sys.exit(1)
 
-    print("RESULT: LOGIN_START", flush=True)
-    camera.login()
-    print("RESULT: LOGIN_OK", flush=True)
+    result("CAMERA_ERZEUGT")
 
-    print("RESULT: START_STREAM", flush=True)
-    camera.start_stream("mainStream")
-    print("RESULT: START_STREAM_OK", flush=True)
+    camera = Camera(
+        uid=uid,
+        username=username,
+        password=password,
+    )
 
-    print(f"RESULT: SOCKET_TYPE={type(getattr(camera, 'sock', None))}", flush=True)
-    print("RESULT: RAW_RECV_START", flush=True)
+    result("CONNECT_START")
 
-    messages = 0
-    payload_bytes = 0
-    raw_errors = 0
+    try:
+        camera.connect()
+        result("CONNECT_OK")
 
-    for attempt in range(1, 11):
-        print(f"RESULT: RECV_ATTEMPT={attempt}", flush=True)
-        try:
-            msg = camera._recv(timeout=3.0)
-            messages += 1
-            print(f"RESULT: RECV_OK={attempt}", flush=True)
-            print(f"RESULT: MSG_TYPE={type(msg)}", flush=True)
+    except Exception as exc:
+        result(f"CONNECT_FEHLER={type(exc).__name__}: {exc}")
+        traceback.print_exc()
+        sys.exit(2)
 
-            header = getattr(msg, "header", None)
-            payload = getattr(msg, "payload", b"")
+    result("LOGIN_START")
 
-            if header is not None:
-                print(f"RESULT: MSG_ID={getattr(header, 'msg_id', None)}", flush=True)
-                print(f"RESULT: MSG_NUM={getattr(header, 'msg_num', None)}", flush=True)
-                print(f"RESULT: BODY_LEN={getattr(header, 'body_len', None)}", flush=True)
-                print(f"RESULT: RESPONSE_CODE={getattr(header, 'response_code', None)}", flush=True)
+    try:
+        login_result = camera.login()
 
-            if isinstance(payload, (bytes, bytearray)):
-                payload_bytes += len(payload)
-                print(f"RESULT: PAYLOAD_LEN={len(payload)}", flush=True)
-                print(f"RESULT: PAYLOAD_FIRST_32={bytes(payload[:32]).hex()}", flush=True)
-                print(f"RESULT: H264_MARKER={'JA' if b'H264' in payload else 'NEIN'}", flush=True)
-                print(
-                    "RESULT: H264_ANNEXB_STARTCODE="
-                    + ("JA" if b"\x00\x00\x00\x01" in payload or b"\x00\x00\x01" in payload else "NEIN"),
-                    flush=True,
+        result("LOGIN_OK")
+        result(f"LOGIN_RESULT_TYPE={type(login_result)}")
+
+        if login_result is not None:
+            text = str(login_result)
+            result(f"LOGIN_RESULT_LEN={len(text)}")
+            print(text[:4000], flush=True)
+
+    except Exception as exc:
+        result(f"LOGIN_FEHLER={type(exc).__name__}: {exc}")
+        traceback.print_exc()
+        sys.exit(3)
+
+    result("START_STREAM")
+
+    try:
+        camera.start_stream("mainStream")
+        result("START_STREAM_OK")
+
+    except Exception as exc:
+        result(f"START_STREAM_FEHLER={type(exc).__name__}: {exc}")
+        traceback.print_exc()
+        sys.exit(4)
+
+    result("STREAM_LAEUFT")
+
+    sock = getattr(camera, "sock", None)
+
+    if sock is not None:
+        result(f"SOCKET_TYPE={type(sock)}")
+
+        for attribute in (
+            "addr",
+            "camera_id",
+            "client_id",
+            "data_packets_received",
+            "data_bytes_received",
+            "acks_received",
+            "acks_sent",
+        ):
+            try:
+                value = getattr(sock, attribute)
+                result(f"SOCKET_{attribute.upper()}={value}")
+            except Exception:
+                pass
+
+    result("WARTE_AUF_STREAM")
+
+    for second in range(1, 16):
+        time.sleep(1)
+
+        if sock is not None:
+            try:
+                packets = getattr(sock, "data_packets_received", None)
+                bytes_received = getattr(sock, "data_bytes_received", None)
+
+                result(
+                    f"STREAM_STATUS={second}s "
+                    f"PACKETS={packets} "
+                    f"BYTES={bytes_received}"
                 )
 
-        except Exception as exc:
-            raw_errors += 1
-            print(f"RESULT: RECV_FEHLER={type(exc).__name__}: {exc}", flush=True)
+            except Exception as exc:
+                result(f"STREAM_STATUS_FEHLER={type(exc).__name__}: {exc}")
 
-            if type(exc).__name__ == "InvalidMagicError":
-                print("RESULT: RAW_UDP_DATEN_ERKANNT=JA", flush=True)
-            if type(exc).__name__ == "TimeoutError":
-                print("RESULT: UDP_TIMEOUT=JA", flush=True)
+    result("STOP_STREAM")
 
-    print("RESULT: RAW_RECV_ENDE", flush=True)
-    print(f"RESULT: MESSAGE_COUNT={messages}", flush=True)
-    print(f"RESULT: PAYLOAD_BYTES={payload_bytes}", flush=True)
-    print(f"RESULT: RAW_ERRORS={raw_errors}", flush=True)
-
-    print("RESULT: STOP_STREAM", flush=True)
     try:
         camera.stop_stream("mainStream")
-        print("RESULT: STOP_STREAM_OK", flush=True)
-    except Exception as exc:
-        print(f"RESULT: STOP_STREAM_FEHLER={type(exc).__name__}: {exc}", flush=True)
+        result("STOP_STREAM_OK")
 
-    try:
-        camera.close()
-        print("RESULT: CLOSE_OK", flush=True)
     except Exception as exc:
-        print(f"RESULT: CLOSE_FEHLER={type(exc).__name__}: {exc}", flush=True)
+        result(f"STOP_STREAM_FEHLER={type(exc).__name__}: {exc}")
 
 except Exception as exc:
-    print(f"RESULT: TEST_FEHLER={type(exc).__name__}: {exc}", flush=True)
+    result(f"TEST_FEHLER={type(exc).__name__}: {exc}")
     traceback.print_exc()
 
-print("RESULT: TEST_ENDE", flush=True)
-print("RESULT: PYTHON_ENDE", flush=True)
+finally:
+    if camera is not None:
+        try:
+            camera.close()
+            result("CLOSE_OK")
+        except Exception as exc:
+            result(f"CLOSE_FEHLER={type(exc).__name__}: {exc}")
+
+result("TEST_ENDE")
+result("PYTHON_ENDE")
